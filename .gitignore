@@ -35,3 +35,14 @@ cookies.txt
 **/reports/
 **/output/
 **/outputs/
+
+# Archives
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# Legacy matrix_app folders
+matrix_app/
+matrix_app 2/
+matrix_app*/

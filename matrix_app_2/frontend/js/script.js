@@ -663,7 +663,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (text) {
                         userInput.value = text;
                         userInput.dispatchEvent(new Event('input'));
-                        sendMessage();
+                        // Tag this turn as voice-originated (self-hosted Nemotron ASR)
+                        // so the backend can apply extra entity-grounding scrutiny to
+                        // it instead of trusting the transcript as-is — see
+                        // sendMessage()'s inputSource handling below.
+                        sendMessage({ inputSource: 'voice' });
                     } else if (twoWayChatActive) {
                         // Nothing said — same as the browser engine's silent-restart
                         // case, keep the 2-Way Chat loop alive instead of going idle.
@@ -829,7 +833,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (text && !isShortSpeech) {
                         userInput.dispatchEvent(new Event('input'));
-                        sendMessage();
+                        // Tag this turn as voice-originated (browser SpeechRecognition)
+                        // so the backend can apply extra entity-grounding scrutiny to
+                        // it instead of trusting the transcript as-is — see
+                        // sendMessage()'s inputSource handling below.
+                        sendMessage({ inputSource: 'voice' });
                     } else if (isSilentRestart) {
                         userInput.value = '';
                         userInput.dispatchEvent(new Event('input'));
@@ -1642,6 +1650,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...(options.endpointWriteConfirmation ? { endpoint_write_confirmation: options.endpointWriteConfirmation } : {}),
                     ...(options.endpointMultiSelection ? { endpoint_multi_selection: options.endpointMultiSelection } : {}),
                     ...(options.endpointMultiSelectionQuery ? { endpoint_multi_selection_query: options.endpointMultiSelectionQuery } : {}),
+                    // Every call site defaults to 'text' (typing, buttons, programmatic
+                    // sendMessage() calls); only the two ASR auto-submit paths above
+                    // pass inputSource: 'voice' explicitly.
+                    input_source: options.inputSource || 'text',
                     lang: currentLang
                 }),
                 signal: currentController.signal

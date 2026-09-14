@@ -681,6 +681,12 @@ from langgraph.graph import StateGraph, END
 from qdrant_client import QdrantClient, models as qdrant_models
 from neo4j import GraphDatabase as _Neo4jDriver
 import embedder
+from services.location import UP_DISTRICTS as _UP_DISTRICTS
+
+# Flat list of district name strings, for the voice-entity grounding pool
+# below (_fetch_voice_grounding_candidates) — UP_DISTRICTS itself is a list
+# of {"name", "lat", "lng"} dicts used elsewhere for map coordinates.
+UP_DISTRICT_NAMES = [d["name"] for d in _UP_DISTRICTS]
 # Report generation removed — services/dynamic_report_service.py,
 # services/template_reskin_engine.py, services/adhoc_generation_service.py,
 # and services/db_schema_introspect.py are no longer used by this file.
@@ -957,6 +963,7 @@ class State(TypedDict):
     relationship_entities: List[str]    # the 2+ entity/incident names check_query_manager extracted for the relationship query
     external_relationship_context: str  # raw DuckDuckGo snippets gathered by web_relationship_search_node
     relationship_search_done: bool      # guard so web_relationship_search_node only runs once per turn
+    input_source: str                   # "voice" (STT auto-submit) or "text" (typed) — set by server.py from ChatRequest.input_source; gates query_rewriter_node's voice entity grounding (Phase 5)
 
 
 # =========================
@@ -1084,6 +1091,96 @@ Output ONLY a JSON object:
 # =========================
 # QUERY REWRITER — grammar fix + conversation-history relation
 # =========================
+# =========================
+# VOICE ENTITY GROUNDING 
+# =========================
+# STT (browser SpeechRecognition / self-hosted Nemotron ASR — see script.js)
+# can mishear names, handles, and hashtags. Rather than trust a voice
+# transcript's proper nouns as fact, cross-check them against real DB values
+# before they reach table_selector/generate_sql. Gated on
+# state["input_source"] == "voice" (see query_rewriter_node below) so typed
+# queries keep their current latency/cost profile unchanged.
+
+_VOICE_GROUNDING_CACHE: Dict[str, Any] = {"fetched_at": None, "candidates": None}
+_VOICE_GROUNDING_TTL = timedelta(minutes=15)
+
+
+def _fetch_voice_grounding_candidates() -> Dict[str, List[str]]:
+    """Cheap, cached (15 min TTL) fetch of the real values a voice-transcribed
+    entity should be checked against: monitored profile handles, hashtag
+    keywords (both languages), and UP districts. Same DB-first, no-LLM-
+    guessing spirit as _term_exists_in_internal_data above. Fails to an
+    empty candidate set (never raises) so a DB hiccup just skips grounding
+    for this turn instead of breaking the chat."""
+    now = datetime.utcnow()
+    cached = _VOICE_GROUNDING_CACHE
+    if cached["candidates"] is not None and cached["fetched_at"] is not None:
+        if now - cached["fetched_at"] < _VOICE_GROUNDING_TTL:
+            return cached["candidates"]
+
+    candidates = {"profiles": [], "hashtags": [], "districts": list(UP_DISTRICT_NAMES)}
+    conn = None
+    try:
+        conn = mysql.connector.connect(
+            host=MYSQL_HOST, port=int(MYSQL_PORT), user=MYSQL_USER,
+            password=MYSQL_PASSWORD, database=MYSQL_DB, connection_timeout=8,
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT user_name FROM monitor_profiles WHERE user_name IS NOT NULL LIMIT 2000")
+        candidates["profiles"] = [r[0] for r in cursor.fetchall() if r[0]]
+        cursor.execute(
+            "SELECT DISTINCT hashtag_keyword FROM hashtags WHERE hashtag_keyword IS NOT NULL "
+            "UNION SELECT DISTINCT hashtag_hindi_keyword FROM hashtags WHERE hashtag_hindi_keyword IS NOT NULL "
+            "LIMIT 2000"
+        )
+        candidates["hashtags"] = [r[0] for r in cursor.fetchall() if r[0]]
+        cursor.close()
+    except Exception as e:
+        print(f"⚠️ _fetch_voice_grounding_candidates DB check failed: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+    _VOICE_GROUNDING_CACHE["candidates"] = candidates
+    _VOICE_GROUNDING_CACHE["fetched_at"] = now
+    return candidates
+
+
+def _ground_voice_entities(entities: List[str]) -> Dict[str, Any]:
+    """Fuzzy-match each extracted entity against real DB values.
+    Returns {"substitutions": {original: matched}, "ambiguous": [(original, best_match)], "unmatched": [...]}.
+    - ratio >= 0.92  -> confident, silently substitute
+    - 0.65-0.92      -> ambiguous, ask "did you mean X?" instead of guessing
+    - < 0.65         -> no plausible match in our known lists, leave as-is
+                        (NOT necessarily wrong — could be a real term this
+                        candidate set just doesn't cover, e.g. an incident
+                        name not stored as a profile/hashtag/district)
+    """
+    candidates = _fetch_voice_grounding_candidates()
+    pool = candidates["profiles"] + candidates["hashtags"] + candidates["districts"]
+    result = {"substitutions": {}, "ambiguous": [], "unmatched": []}
+    if not pool:
+        return result
+
+    for entity in entities:
+        entity = (entity or "").strip()
+        if not entity:
+            continue
+        matches = difflib.get_close_matches(entity, pool, n=1, cutoff=0.65)
+        if not matches:
+            result["unmatched"].append(entity)
+            continue
+        best = matches[0]
+        ratio = difflib.SequenceMatcher(None, entity.lower(), best.lower()).ratio()
+        if entity.lower() == best.lower():
+            continue  # exact already, nothing to ground
+        if ratio >= 0.92:
+            result["substitutions"][entity] = best
+        else:
+            result["ambiguous"].append((entity, best))
+    return result
+
+
 async def query_rewriter_node(state: State) -> dict:
     """START -> here first, every turn.
 
@@ -1517,7 +1614,8 @@ No explanation.
   "explain_request": true or false,
   "resolved_topic_id": "exact unique_topic_id if a previous topic/post reference can be uniquely resolved, otherwise empty string"
   "resolved_profile_username": "username or empty string",
-  "resolved_post_context": true or false
+  "resolved_post_context": true or false,
+  "extracted_entities": ["proper nouns / named things in corrected_query — person names, handles, hashtags, district/place names, organization names. Empty list if none."]
 }}
 """
 
@@ -1529,12 +1627,14 @@ No explanation.
     explain_request = False
     explain_answer = ""
     
+    extracted_entities: List[str] = []
     try:
         parsed = json.loads(clean_json_string(raw))
         corrected_query = str(parsed.get("corrected_query") or "").strip() or query
         if parsed.get("related"):
             rewrite_context = str(parsed.get("notes") or "").strip()
-        
+        extracted_entities = [str(e).strip() for e in (parsed.get("extracted_entities") or []) if str(e).strip()]
+
         if parsed.get("needs_clarification"):
             needs_clarification = True
             clarification_message = str(parsed.get("clarification_message") or "Could you please clarify what you mean?")
@@ -1594,7 +1694,49 @@ No explanation.
         # ──────────────────────────────────────────────────────────────────
     if explain_request:
         result["answer"] = explain_answer
-        
+
+    # ── Voice entity grounding ────────────────────────────────
+    # Only for voice-originated turns (input_source == "voice", set by
+    # server.py from ChatRequest.input_source ), and only if
+    # the LLM's own needs_clarification/explain_request didn't already
+    # claim this turn. Cross-checks extracted_entities against real DB
+    # values before they're treated as fact by table_selector/generate_sql.
+    if (
+        state.get("input_source") == "voice"
+        and extracted_entities
+        and not needs_clarification
+        and not explain_request
+    ):
+        grounding = _ground_voice_entities(extracted_entities)
+        for original, matched in grounding["substitutions"].items():
+            # High-confidence (ratio >= 0.92): STT almost certainly misheard
+            # `original` for this real known value — substitute silently.
+            corrected_query = re.sub(re.escape(original), matched, corrected_query, flags=re.IGNORECASE)
+            result["corrected_query"] = corrected_query
+            add_trace("query_rewriter", output=f"[voice grounding] substituted '{original}' -> '{matched}'")
+        if grounding["ambiguous"]:
+            # Medium-confidence (0.65-0.92): don't guess — ask, reusing the
+            # same pending_keyword_confirmation shape the LLM-driven
+            # clarification path uses above, so the next turn is handled
+            # identically either way.
+            original, best = grounding["ambiguous"][0]
+            ask_message = f"I heard \"{original}\" — did you mean **{best}**?"
+            result["needs_clarification"] = True
+            result["answer"] = ask_message
+            result["pending_keyword_confirmation"] = {
+                "term": original,
+                "resolved_entity": best,
+                "resolved_query": corrected_query.replace(original, best),
+                "source": "voice_grounding",
+                "internal_alternative": False,
+            }
+            add_trace("query_rewriter",
+                       output=f"[voice grounding] ambiguous '{original}' ~ '{best}' — asking for confirmation")
+        # Entities below the 0.65 cutoff (grounding["unmatched"]) are left
+        # untouched — no plausible match in our known lists is NOT proof the
+        # term is wrong, it may simply be a real subject this candidate set
+        # doesn't cover (e.g. an incident name, not a profile/hashtag/district).
+
     return result
 
 
@@ -3927,6 +4069,34 @@ Find mp.user_name first, then match it against analyzed_data.mention_ids_extract
 
 ---
 
+## Sentiment Analysis Rules
+
+`analyzed_data.sentiment_label` (Positive / Neutral / Negative) is a post-level
+field and can be requested about **any subject**, not just crime incidents:
+
+- An incident or topic (e.g. "sentiment on the NEET protest").
+- An organization or institution — **including UP Police itself, or any of
+  its units, ranks, or officers** (e.g. "DGP UP", "Lucknow Police", "STF")
+  when they are the subject of the posts being analyzed. Treat these exactly
+  like any other organization entity; do not special-case, avoid, or refuse
+  sentiment questions just because the subject is the police department
+  itself.
+- A monitored profile/handle from `monitor_profiles`.
+
+To answer a sentiment question:
+
+1. Resolve the subject first — match it against `topic_title` /
+   `input_text` (incident/content subject) or against `monitor_profiles` +
+   `analyzed_data.mention_ids_extracted` (organization/handle subject, using
+   the mandatory join pattern documented above).
+2. Filter `analyzed_data` rows to that subject.
+3. Aggregate `sentiment_label` (e.g. `COUNT(*) ... GROUP BY sentiment_label`)
+   or return the label directly, depending on whether the user asked for a
+   breakdown or individual posts.
+
+Do not assume "sentiment" implicitly means "sentiment about a crime" — the
+subject can be anything documented in the schema.
+
 ---
 
 ## Filtering Rules
@@ -3940,6 +4110,28 @@ For Hindi or multilingual searchable text columns:
 
 **CRITICAL RULE: NEVER use exact match `=` for text columns.**
 Always use `LIKE '%...%'`. For example, never write `topic_title = 'सपा छात्र सभा'`, always write `topic_title LIKE '%सपा छात्र सभा%'`. This is because titles in the database often contain prefixes (like 'Lucknow - ') that an exact match will fail to catch.
+
+### Hashtags vs. incident/content search — different language priority
+
+These are two different kinds of search and use different language rules:
+
+* **Hashtag terms (`#term`)** — a hashtag is often written in Latin script
+  even inside otherwise-Hindi posts. When the query names a `#term`, OR
+  together **both** the English/Latin form and the Hindi/Devanagari form as
+  equally-weighted conditions (no priority between them) against
+  `hashtags.hashtag_keyword` / `hashtags.hashtag_hindi_keyword` for
+  definitional lookups, or `input_text` / `mention_ids_extracted` when the
+  user wants posts that used the hashtag. If the query contains a bare `#`
+  or a `#` followed only by filler/request words with no actual term (e.g.
+  "what is # today"), there is nothing to search — do not guess a value;
+  return the documented "not available" fallback instead.
+* **Incident/topic/content search terms** (`topic_title`, `input_text`,
+  `post_title`, `reply_text` — not a `#` hashtag) — this data is stored
+  almost entirely in Hindi (~97%). Generate the **Hindi/Devanagari form as
+  the primary `LIKE` condition**, with the English form OR'd in as a
+  secondary/fallback condition, not the other way around. An English-only
+  or English-primary search will systematically under-return rows against
+  this dataset.
 
 Whenever the user searches for a keyword or phrase, build the `LIKE` conditions
 by working through these steps IN ORDER. Never take a user phrase and drop it
@@ -4560,9 +4752,49 @@ def _inject_temporal_filter(sql: str, query: str) -> str:
     return _append_where_condition(sql, " AND ".join(conditions))
 
 
+# Words that describe the QUESTION, not searchable content — same filler
+# list the SYSTEM_PROMPT's Step 1 already strips for LIKE-building; reused
+# here so the deterministic '#' guard below agrees with the LLM's own
+# understanding of what counts as "nothing left to search for".
+_HASHTAG_FILLER_WORDS = {
+    "case", "cases", "incident", "incidents", "matter", "reported", "how",
+    "many", "total", "count", "list", "show", "find", "till", "now", "so",
+    "far", "today", "yesterday", "is", "was", "the", "a", "an", "of", "on",
+    "for", "what", "which",
+}
+
+
+def _hashtag_terms_are_empty(query: str) -> bool:
+    """True when every '#' in the query is either bare or followed only by
+    filler/request words — i.e. there is no actual hashtag term to search
+    for (e.g. "what is # today", "any updates on #"). Deterministic, no LLM
+    call, so a malformed hashtag reference never reaches generate_sql()."""
+    hashtag_tokens = re.findall(r"#(\S*)", query)
+    if not hashtag_tokens:
+        return False  # no '#' present at all — not this guard's concern
+    for token in hashtag_tokens:
+        cleaned = re.sub(r"[^\w\u0900-\u097F]+", " ", token).strip()
+        words = [w for w in cleaned.lower().split() if w not in _HASHTAG_FILLER_WORDS]
+        if words:
+            return False  # at least one real hashtag term found
+    return True
+
+
 async def generate_sql_node(state: State) -> dict:
     """Wraps generate_sql() as a graph node."""
     query = state["query"]
+
+    # ── Deterministic '#' guard (Phase 2) ───────────────────────────────
+    # '#' means hashtag/mention in this dataset. If every '#' in the query
+    # is empty or has nothing but filler words after it, don't spend an LLM
+    # call guessing a query — go straight to the documented "not available"
+    # fallback so the graph can ask the user to clarify instead of running
+    # SQL against an empty/guessed condition.
+    if _hashtag_terms_are_empty(query):
+        fallback_sql = "SELECT 'Requested information is not available in the documented schema.' AS message;"
+        add_trace("generate_sql", user_query=query,
+                   output="Bare/incomplete '#' reference — skipped LLM call, returned documented fallback.")
+        return {"sql": fallback_sql}
     resolved_topic_id = state.get("resolved_topic_reference", "")
     
     # If this is a retry from sql_judge, pass the previous SQL and feedback
@@ -4662,6 +4894,29 @@ Respond with ONLY one word: count or summary."""
     return "count" if "count" in label else "summary"
 
 
+_CONTENT_SEARCH_COLUMNS = ("topic_title", "input_text", "post_title", "reply_text")
+
+
+def _sql_is_hindi_only_content_search(sql: str) -> bool:
+    """True when `sql` has a LIKE condition on a content-search column
+    (topic_title/input_text/post_title/reply_text) whose value is
+    Devanagari-only with no Latin-script form alongside it, and it is NOT a
+    hashtag/mention search (those already OR both languages per the
+    SYSTEM_PROMPT's hashtag rule, so they're excluded here). Used by the
+    Hindi→English/Hinglish retry below — a deterministic check, no LLM call."""
+    lowered = sql.lower()
+    if not any(col in lowered for col in _CONTENT_SEARCH_COLUMNS):
+        return False
+    if "mention_ids_extracted" in lowered or "hashtag" in lowered:
+        return False
+    like_values = re.findall(r"like\s*'%?([^%']*)%?'", sql, re.IGNORECASE)
+    if not like_values:
+        return False
+    has_devanagari = any(re.search(r"[\u0900-\u097F]", v) for v in like_values)
+    has_latin_word = any(re.search(r"[A-Za-z]{3,}", v) for v in like_values)
+    return has_devanagari and not has_latin_word
+
+
 async def execute_sql_node(state: State) -> dict:
     """Wraps execute_sql() as a graph node. Classifies query intent to decide
     routing: 'count' → judge_and_reason, 'summary' → llm_validator."""
@@ -4671,7 +4926,48 @@ async def execute_sql_node(state: State) -> dict:
 
     try:
         rows = await asyncio.to_thread(execute_sql, sql)
-        
+
+        # ── Hindi → English/Hinglish retry (Phase 4) ────────────────────
+        # A content search (not hashtag/mention, which already ORs both
+        # languages) that used only Hindi conditions and returned 0 rows
+        # gets one more explicit shot at adding English/Hinglish OR
+        # conditions before this turn falls through to the Qdrant fallback
+        # (see _execute_decision's "zero_rows" branch below). Reuses
+        # generate_sql()'s existing previous_sql/feedback mechanism — this
+        # is one extra inline attempt within this node call, not a new
+        # graph loop, so it can't run more than once per turn.
+        if not rows and _sql_is_hindi_only_content_search(sql):
+            hindi_retry_feedback = (
+                "The previous SQL used only Hindi/Devanagari LIKE conditions "
+                "for a content search (topic_title/input_text/post_title/"
+                "reply_text) and returned 0 rows. Regenerate the SAME query, "
+                "but ADD explicit English/Hinglish OR conditions for the same "
+                "search terms alongside the existing Hindi conditions — do "
+                "not remove the Hindi conditions, add to them."
+            )
+            add_trace("execute_sql", user_query=state["query"],
+                       output="0 rows on Hindi-only content search — retrying with English/Hinglish feedback.")
+            try:
+                retry_sql = await asyncio.to_thread(
+                    generate_sql,
+                    state["query"],
+                    sql,
+                    hindi_retry_feedback,
+                    state.get("selected_tables", []),
+                )
+                retry_sql = _inject_unassigned_exclusion(retry_sql)
+                retry_sql = _inject_temporal_filter(retry_sql, state["query"])
+                if is_safe_sql(retry_sql):
+                    retry_rows = await asyncio.to_thread(execute_sql, retry_sql)
+                    if retry_rows:
+                        sql = retry_sql
+                        rows = retry_rows
+                        add_trace("execute_sql", output=f"English/Hinglish retry succeeded — {len(rows)} rows.")
+                    else:
+                        add_trace("execute_sql", output="English/Hinglish retry also returned 0 rows.")
+            except Exception as exc:
+                add_trace("execute_sql", output=f"English/Hinglish retry failed: {exc}")
+
         # Save to session log and last SQL context
         session_log = state.get("session_log", [])
         session_log.append({
@@ -4727,6 +5023,7 @@ async def execute_sql_node(state: State) -> dict:
     # reached answer_node's "Source Links" section — URLs were computed here
     # every turn and then thrown away.)
     return {
+        "sql": sql,
         "rows": rows,
         "query_intent": query_intent,
         "last_sql_context": last_sql_context,

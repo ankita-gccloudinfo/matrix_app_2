@@ -112,6 +112,11 @@ class ChatRequest(BaseModel):
     expert_name: Optional[str] = None
     lang: Optional[str] = "en"
     chat_id: Optional[str] = None
+    # "voice" when this turn was auto-submitted from STT (browser
+    # SpeechRecognition or self-hosted Nemotron ASR — see script.js), "text"
+    # for typed/manual sends. Used by query_rewriter_node's entity-grounding
+    # gate (Phase 5) to apply extra scrutiny only to voice-originated turns.
+    input_source: Optional[str] = "text"
 
 
 class LocationRequest(BaseModel):
@@ -172,6 +177,7 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
         "user_name": user_name,
         "chat_id": chat_id,
         "question_number": question_number,
+        "input_source": chat_request.input_source or "text",
     }))
 
     while not invoke_task.done():

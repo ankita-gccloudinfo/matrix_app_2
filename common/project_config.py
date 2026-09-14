@@ -24,24 +24,21 @@ PROJECT_CONFIG_COLLECTION = "project_config"
 
 
 def apply_project_config(project_id: str) -> None:
-    """Strictly requires the project to have a saved configuration in the
-    admin_config database. If no configuration is found or the DB cannot
-    be reached, the application will exit."""
-    import sys
+    """Applies environment overrides from admin_config DB if available.
+    If no saved configuration is found or the DB cannot be reached,
+    falls back gracefully to local .env configuration."""
     try:
         client = pymongo.MongoClient(ADMIN_MONGO_URI, serverSelectionTimeoutMS=1500)
         doc = client[ADMIN_DB_NAME][PROJECT_CONFIG_COLLECTION].find_one({"_id": project_id})
         client.close()
     except Exception as e:
-        print(f"❌ Could not reach admin config DB for project '{project_id}': {e}")
-        print("The application requires admin_config DB to be accessible.")
-        sys.exit(1)
+        print(f"⚠️  project_config: Could not reach admin config DB ({ADMIN_MONGO_URI}): {e}")
+        print("ℹ️  Continuing with local .env configuration.")
+        return
 
     if not doc:
-        print(f"❌ No project_config saved for '{project_id}'.")
-        print("The application requires configuration via admin_config to run.")
-        print("Please add the project in the admin_config dashboard (http://localhost:8122) first.")
-        sys.exit(1)
+        print(f"ℹ️  project_config: No saved DB config for '{project_id}'. Using local .env configuration.")
+        return
 
     env_overrides = doc.get("env", {})
     applied = []
@@ -52,4 +49,6 @@ def apply_project_config(project_id: str) -> None:
         applied.append(key)
 
     if applied:
-        print(f"✅ project_config: applied {len(applied)} override(s) for '{project_id}': {', '.join(applied)}")
+        print(f"✅ project_config: applied {len(applied)} override(s) from DB for '{project_id}': {', '.join(applied)}")
+    else:
+        print(f"ℹ️  project_config: DB config for '{project_id}' is empty. Using local .env configuration.")

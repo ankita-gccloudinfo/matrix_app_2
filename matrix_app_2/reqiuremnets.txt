@@ -1,6 +1,7 @@
 speedtest-cli
 pymupdf
 httpx
+requests
 qdrant-client
 
 # torch==2.2.2 is the newest build available for this Intel Mac (no wheel
