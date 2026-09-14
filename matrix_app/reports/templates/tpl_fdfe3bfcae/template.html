@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligence Report - Social Media Monitoring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#3b82f6',
+                        accent: '#f59e0b',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .sentiment-negative {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+        .sentiment-neutral {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .sentiment-positive {
+            background-color: #d1fae5;
+            color: #047857;
+        }
+        .chart-bar {
+            transition: height 0.5s ease;
+        }
+        .section-header {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        @media print {
+            body {
+                background-color: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto p-6 bg-white shadow-lg">
+        <!-- Header -->
+        <header class="mb-8 pb-4 border-b border-gray-200">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-primary">Social Media Intelligence Report</h1>
+                    <p class="text-gray-600 mt-2">Monitoring & Analysis Dashboard</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Report Date</p>
+                    <p class="font-semibold">October 15, 2023</p>
+                    <p class="text-sm text-gray-500 mt-1">Period</p>
+                    <p class="font-semibold">Last 24 Hours</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Summary Stats -->
+        <section class="mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-3">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Total Mentions</p>
+                            <p class="text-2xl font-bold">1,284</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600 mr-3">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Engagement Rate</p>
+                            <p class="text-2xl font-bold">4.7%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-100 text-purple-600 mr-3">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Unique Accounts</p>
+                            <p class="text-2xl font-bold">342</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-orange-100 text-orange-600 mr-3">
+                            <i class="fas fa-globe-americas"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Platforms Monitored</p>
+                            <p class="text-2xl font-bold">5</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sentiment Analysis -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Sentiment Analysis</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm font-medium">Negative</span>
+                        <span class="text-sm font-medium">32%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-red-500 h-2.5 rounded-full" style="width: 32%"></div>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm font-medium">Neutral</span>
+                        <span class="text-sm font-medium">45%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-yellow-500 h-2.5 rounded-full" style="width: 45%"></div>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm font-medium">Positive</span>
+                        <span class="text-sm font-medium">23%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-green-500 h-2.5 rounded-full" style="width: 23%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Platform Distribution -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Platform Distribution</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div class="card p-4 bg-white rounded-lg flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                        <i class="fab fa-twitter text-blue-600 text-xl"></i>
+                    </div>
+                    <p class="font-semibold">Twitter</p>
+                    <p class="text-2xl font-bold">42%</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center mb-2">
+                        <i class="fab fa-instagram text-pink-600 text-xl"></i>
+                    </div>
+                    <p class="font-semibold">Instagram</p>
+                    <p class="text-2xl font-bold">28%</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-blue-200 flex items-center justify-center mb-2">
+                        <i class="fab fa-facebook text-blue-700 text-xl"></i>
+                    </div>
+                    <p class="font-semibold">Facebook</p>
+                    <p class="text-2xl font-bold">15%</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-2">
+                        <i class="fab fa-youtube text-red-600 text-xl"></i>
+                    </div>
+                    <p class="font-semibold">YouTube</p>
+                    <p class="text-2xl font-bold">10%</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-2">
+                        <i class="fab fa-whatsapp text-green-600 text-xl"></i>
+                    </div>
+                    <p class="font-semibold">WhatsApp</p>
+                    <p class="text-2xl font-bold">5%</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Posts -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Top Posts</h2>
+            <div class="space-y-4">
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex justify-between">
+                        <div>
+                            <p class="font-semibold">John Smith (@johnsmith)</p>
+                            <p class="text-sm text-gray-500">Twitter • 2 hours ago</p>
+                        </div>
+                        <span class="sentiment-negative px-2 py-1 rounded text-xs font-semibold">Negative</span>
+                    </div>
+                    <p class="mt-2">Breaking: Local police department under investigation for alleged misconduct. This is a serious matter that requires immediate attention from authorities.</p>
+                    <div class="mt-3 flex space-x-2">
+                        <span class="text-xs text-gray-500">Likes: 42</span>
+                        <span class="text-xs text-gray-500">Comments: 8</span>
+                        <span class="text-xs text-gray-500">Shares: 3</span>
+                    </div>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <div class="flex justify-between">
+                        <div>
+                            <p class="font-semibold">Sarah Johnson (@sarahj)</p>
+                            <p class="text-sm text-gray-500">Instagram • 4 hours ago</p>
+                        </div>
+                        <span class="sentiment-positive px-2 py-1 rounded text-xs font-semibold">Positive</span>
+                    </div>
+                    <p class="mt-2">Great job by our local police force today! Their community outreach program has made a real difference in our neighborhood. #CommunitySafety</p>
+                    <div class="mt-3 flex space-x-2">
+                        <span class="text-xs text-gray-500">Likes: 128</span>
+                        <span class="text-xs text-gray-500">Comments: 15</span>
+                        <span class="text-xs text-gray-500">Shares: 7</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engagement Metrics -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Engagement Metrics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="card p-4 bg-white rounded-lg">
+                    <p class="text-sm text-gray-500">Total Likes</p>
+                    <p class="text-2xl font-bold">3,421</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <p class="text-sm text-gray-500">Total Comments</p>
+                    <p class="text-2xl font-bold">892</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <p class="text-sm text-gray-500">Total Shares</p>
+                    <p class="text-2xl font-bold">247</p>
+                </div>
+                <div class="card p-4 bg-white rounded-lg">
+                    <p class="text-sm text-gray-500">Total Views</p>
+                    <p class="text-2xl font-bold">12,840</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trending Topics -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Trending Topics</h2>
+            <div class="flex flex-wrap gap-2">
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">#PoliceReform</span>
+                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">#CommunitySafety</span>
+                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">#LawEnforcement</span>
+                <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">#PublicSafety</span>
+                <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">#LocalNews</span>
+            </div>
+        </section>
+
+        <!-- Intelligence Summary -->
+        <section class="mb-8">
+            <h2 class="section-header text-xl font-bold text-dark">Intelligence Summary</h2>
+            <div class="card p-4 bg-white rounded-lg">
+                <p class="mb-3">The monitoring period has yielded a moderate volume of social media activity related to local law enforcement. Key themes include public safety concerns, community engagement efforts, and ongoing discussions about police reform.</p>
+                <p class="mb-3">Sentiment analysis indicates a mixed response to recent developments, with negative sentiment representing 32% of total mentions. Positive sentiment remains steady at 23%, suggesting continued public interest in community policing initiatives.</p>
+                <p>Recommendation: Continue monitoring for escalation in negative sentiment trends and maintain engagement with community stakeholders to address concerns proactively.</p>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
+            <p>© 2023 Police Intelligence Monitoring System | Confidential Report</p>
+        </footer>
+    </div>
+</body>
+</html>

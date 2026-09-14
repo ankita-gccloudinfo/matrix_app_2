@@ -1,0 +1,82 @@
+.app-container {
+    display: flex;
+    height: 100%;
+}
+
+.main-content {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.glow-bg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60vw;
+    height: 60vh;
+    background: radial-gradient(circle, var(--blue-glow) 0%, rgba(255,255,255,0) 70%);
+    z-index: 0;
+    transition: all 0.5s ease;
+}
+
+.content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+    padding: 0 20px;
+    transition: justify-content 0.5s;
+    min-height: 0;
+}
+
+.hero-section {
+    text-align: center;
+    margin-bottom: 40px;
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.greeting {
+    font-size: 32px;
+    font-weight: 400;
+    color: var(--text-primary);
+    background: linear-gradient(90deg, #1f2937, #4b5563);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.greeting span {
+    -webkit-text-fill-color: initial !important;
+}
+
+/* ── Resizable Sidebar Handles ── */
+.resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 10000;
+    transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+    background: rgba(79, 142, 247, 0.4);
+}
+
+.resize-left {
+    left: -3px;
+}
+
+.resize-right {
+    right: -3px;
+}

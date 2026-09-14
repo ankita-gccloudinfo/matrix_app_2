@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matrix App 2 — DB-Only LangGraph Pipeline Architecture & Workflow</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .node-card {
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .node-card:hover {
+      transform: translateY(-2px);
+    }
+    
+    .node-card.active {
+      ring-width: 2px;
+      transform: translateY(-2px);
+    }
+
+    .pulse-glow {
+      animation: pulseGlow 2s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.3);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-indigo-500/30 selection:text-indigo-200 p-4 md:p-8">
+
+  <!-- Main Container -->
+  <div class="max-w-7xl mx-auto space-y-8">
+    
+    <!-- Top Header / Banner -->
+    <header class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-2xl backdrop-blur-xl">
+      <div class="absolute -right-20 -top-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="space-y-2">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span>Matrix App 2 Architecture</span>
+            <span class="text-slate-500">•</span>
+            <span>Pure DB-Only Pipeline</span>
+          </div>
+          <h1 class="text-2xl md:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+            UP Police Social Media Intelligence Agent
+          </h1>
+          <p class="text-slate-400 text-sm md:text-base max-w-3xl leading-relaxed">
+            Simplified 20-node LangGraph autonomous workflow for high-precision SQL synthesis, multi-lingual grounding (Hindi/English), semantic Qdrant vector retrieval, Neo4j knowledge graph reasoning, and automated auditing.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 self-start md:self-center">
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center shadow-inner">
+            <div class="text-xs text-slate-400 font-medium">Pipeline Nodes</div>
+            <div class="text-xl font-bold text-indigo-400">20 Nodes</div>
+          </div>
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center shadow-inner">
+            <div class="text-xs text-slate-400 font-medium">Core Target</div>
+            <div class="text-xl font-bold text-emerald-400">MySQL DB</div>
+          </div>
+          <div class="bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-center shadow-inner">
+            <div class="text-xs text-slate-400 font-medium">Fallbacks</div>
+            <div class="text-xl font-bold text-cyan-400">Qdrant + Neo4j</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Interactive Walkthrough Banner & Controller -->
+    <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-indigo-400">Live Stage-By-Stage Execution Trace</div>
+          <h2 class="text-xl font-bold text-white mt-0.5">Interactive Example Query Simulation</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="prevStepBtn" onclick="prevStep()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-slate-700 transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Prev Stage
+          </button>
+          <button id="playBtn" onclick="toggleAutoPlay()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5">
+            <span id="playIcon">▶</span>
+            <span id="playText">Auto Play</span>
+          </button>
+          <button id="nextStepBtn" onclick="nextStep()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-slate-700 transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            Next Stage
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <button onclick="resetSimulation()" class="px-3 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 text-xs font-medium border border-slate-800 transition">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Sample Query Banner -->
+      <div class="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 font-mono text-xs uppercase font-semibold">User Query</span>
+          <span class="text-white font-medium text-base">"Lucknow mein paper leak se related kitne posts hain aur log kya bol rahe hain?"</span>
+        </div>
+        <div class="text-xs text-slate-400 flex items-center gap-2">
+          <span>Intent: <strong class="text-indigo-300">Count + Sentiment Summary</strong></span>
+          <span>•</span>
+          <span>District: <strong class="text-emerald-300">Lucknow</strong></span>
+        </div>
+      </div>
+
+      <!-- Dynamic Stage Details Viewport -->
+      <div id="stageDetailsBox" class="bg-slate-950/80 border border-slate-800 rounded-xl p-5 transition-all">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Visual Architecture Flowchart (The 5 Pipeline Zones) -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <span>Graph Topology & Pipeline Stages</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono font-normal">20 Nodes</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Click any node below to inspect its operational logic, prompts, and schema behavior.</p>
+        </div>
+      </div>
+
+      <!-- 5 Zone Flow Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        
+        <!-- Zone 1: Query Ingestion & Disambiguation -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+              <span class="text-xs font-bold tracking-wider text-blue-400 uppercase">1. Query Ingestion</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 font-mono">3 Nodes</span>
+            </div>
+            <div class="space-y-2.5">
+              
+              <!-- Node 1 -->
+              <div id="node-query_rewriter" onclick="showNodeDetails('query_rewriter')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">query_rewriter</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-mono">ENTRY</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Normalizes user prompt; grounds ambiguities via 7 web questions if needed.</p>
+              </div>
+
+              <!-- Node 2 -->
+              <div id="node-query_manager" onclick="showNodeDetails('query_manager')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">query_manager</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Reconstructs follow-up turns into a single self-contained standalone query.</p>
+              </div>
+
+              <!-- Node 3 -->
+              <div id="node-check_query_manager" onclick="showNodeDetails('check_query_manager')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">check_query_manager</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">ROUTER</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Evaluates query accuracy; routes to keyword grounding if topic detected.</p>
+              </div>
+
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex items-center justify-between pt-2 border-t border-slate-800/60 font-mono">
+            <span>Exit ➔ Keyword / SQL</span>
+          </div>
+        </div>
+
+        <!-- Zone 2: Bilingual Grounding & Acronym Resolver -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+              <span class="text-xs font-bold tracking-wider text-amber-400 uppercase">2. Entity Grounding</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 font-mono">4 Nodes</span>
+            </div>
+            <div class="space-y-2.5">
+              
+              <!-- Node 4 -->
+              <div id="node-keyword_of_post_maker" onclick="showNodeDetails('keyword_of_post_maker')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">keyword_of_post_maker</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Generates EN/Hindi spellings, hashtags & entities via `recycle_search` table.</p>
+              </div>
+
+              <!-- Node 5 -->
+              <div id="node-go_duck_search" onclick="showNodeDetails('go_duck_search')" class="node-card cursor-pointer bg-slate-800/40 hover:bg-slate-800 border border-dashed border-amber-500/40 rounded-xl p-2.5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-amber-200">go_duck_search</span>
+                  <span class="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-mono">WEB DUCK</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Live web search fallback for unknown slang or short-forms.</p>
+              </div>
+
+              <!-- Node 6 -->
+              <div id="node-keyword_of_post_maker_and_checker" onclick="showNodeDetails('keyword_of_post_maker_and_checker')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">keyword_checker</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Filters hallucinations & builds clean SQL LIKE combinations.</p>
+              </div>
+
+              <!-- Node 7 -->
+              <div id="node-go_duck_search_verify" onclick="showNodeDetails('go_duck_search_verify')" class="node-card cursor-pointer bg-slate-800/40 hover:bg-slate-800 border border-dashed border-amber-500/40 rounded-xl p-2.5 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-amber-200">go_duck_search_verify</span>
+                  <span class="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-mono">VERIFY</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Secondary verification check if all keywords were dropped.</p>
+              </div>
+
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex items-center justify-between pt-2 border-t border-slate-800/60 font-mono">
+            <span>Exit ➔ table_selector</span>
+          </div>
+        </div>
+
+        <!-- Zone 3: SQL Engine & Safety Audit -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+              <span class="text-xs font-bold tracking-wider text-emerald-400 uppercase">3. MySQL Engine</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-mono">5 Nodes</span>
+            </div>
+            <div class="space-y-2.5">
+              
+              <!-- Node 8 -->
+              <div id="node-table_selector" onclick="showNodeDetails('table_selector')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">table_selector</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Selects exact minimal tables (topic, analyzed_data, post_bank, etc.).</p>
+              </div>
+
+              <!-- Node 9 -->
+              <div id="node-generate_sql" onclick="showNodeDetails('generate_sql')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">generate_sql</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Writes optimized MySQL with date partition pruning and Hindi/EN LIKE.</p>
+              </div>
+
+              <!-- Node 10 -->
+              <div id="node-sql_judge" onclick="showNodeDetails('sql_judge')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">sql_judge</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">LOOP</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Audits query logic vs intent. Triggers retry on logic failure.</p>
+              </div>
+
+              <!-- Node 11 -->
+              <div id="node-is_safe_sql" onclick="showNodeDetails('is_safe_sql')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">is_safe_sql</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">GUARD</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Deterministic AST safety check. Blocks mutations/DDL/injections.</p>
+              </div>
+
+              <!-- Node 12 -->
+              <div id="node-execute_sql" onclick="showNodeDetails('execute_sql')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">execute_sql</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Runs against MySQL. 0 rows triggers Vector/Graph Fallback.</p>
+              </div>
+
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex items-center justify-between pt-2 border-t border-slate-800/60 font-mono">
+            <span>0 rows ➔ Fallback | Data ➔ Synth</span>
+          </div>
+        </div>
+
+        <!-- Zone 4: Semantic Qdrant & Neo4j Fallback -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+              <span class="text-xs font-bold tracking-wider text-cyan-400 uppercase">4. Fallback Network</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-mono">4 Nodes</span>
+            </div>
+            <div class="space-y-2.5">
+              
+              <!-- Node 13 -->
+              <div id="node-fallback_decider" onclick="showNodeDetails('fallback_decider')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">fallback_decider</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Decides between Qdrant vector index search or Neo4j graph query.</p>
+              </div>
+
+              <!-- Node 14 -->
+              <div id="node-content_index_search" onclick="showNodeDetails('content_index_search')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">content_index_search</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">QDRANT</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Embeds query and searches dense vector index for topic IDs.</p>
+              </div>
+
+              <!-- Node 15 -->
+              <div id="node-neo4j_search" onclick="showNodeDetails('neo4j_search')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">neo4j_search</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">NEO4J</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Traverses knowledge graph relationships, authors & district tags.</p>
+              </div>
+
+              <!-- Node 16 -->
+              <div id="node-fallbackchecker" onclick="showNodeDetails('fallbackchecker')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">fallbackchecker</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Injects discovered topic IDs back into MySQL table_selector retry.</p>
+              </div>
+
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex items-center justify-between pt-2 border-t border-slate-800/60 font-mono">
+            <span>Hint ➔ table_selector Retry</span>
+          </div>
+        </div>
+
+        <!-- Zone 5: Analysis, Reasoning & Quality Check -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
+              <span class="text-xs font-bold tracking-wider text-purple-400 uppercase">5. Synthesis & Audit</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 font-mono">4 Nodes</span>
+            </div>
+            <div class="space-y-2.5">
+              
+              <!-- Node 17 -->
+              <div id="node-llm_validator" onclick="showNodeDetails('llm_validator')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">llm_validator</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Batch-processes rows, extracts sentiment percentages and metrics.</p>
+              </div>
+
+              <!-- Node 18 -->
+              <div id="node-judge_and_reason" onclick="showNodeDetails('judge_and_reason')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">judge_and_reason</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Synthesizes evidence, structures timeline and district breakdown.</p>
+              </div>
+
+              <!-- Node 19 -->
+              <div id="node-answer" onclick="showNodeDetails('answer')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">answer</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Generates conversational markdown response with source links.</p>
+              </div>
+
+              <!-- Node 20 -->
+              <div id="node-answer_checker" onclick="showNodeDetails('answer_checker')" class="node-card cursor-pointer bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-xl p-3 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-semibold text-white">answer_checker</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">FINAL</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Hallucination check & completeness audit before sending to user.</p>
+              </div>
+
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex items-center justify-between pt-2 border-t border-slate-800/60 font-mono">
+            <span>Exit ➔ END (User Response)</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Node Deep-Dive Drawer / Modal Details -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>Node Specification & Prompt Architecture</span>
+        </h3>
+        <span id="activeNodeBadge" class="px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 font-mono text-xs font-semibold">query_rewriter</span>
+      </div>
+      <div id="nodeDetailContent" class="space-y-4">
+        <!-- Content filled dynamically -->
+      </div>
+    </section>
+
+    <!-- Footer Specs -->
+    <footer class="text-center text-xs text-slate-500 py-4 border-t border-slate-800/60">
+      Matrix App 2 • Pure Database Intelligence Engine • LangGraph State Machine • UP Police Social Media Analytics
+    </footer>
+
+  </div>
+
+  <!-- Interactive Logic Script -->
+  <script>
+    const executionTrace = [
+      {
+        stageIndex: 1,
+        nodeId: "query_rewriter",
+        title: "Stage 1: Query Ingestion & Disambiguation",
+        subtitle: "Node: query_rewriter_node",
+        description: "The incoming raw conversational prompt from the user is evaluated. The rewriter normalizes slang and identifies if the user request requires immediate clarifying questions before proceeding.",
+        inputPayload: {
+          "raw_query": "Lucknow mein paper leak se related kitne posts hain aur log kya bol rahe hain?",
+          "conversation_history": "[] (New Session)"
+        },
+        outputPayload: {
+          "needs_clarification": false,
+          "corrected_query": "Lucknow paper leak posts count and public reaction summary",
+          "intent": "count_and_summary"
+        },
+        decision: "Clear intent detected. Next ➔ query_manager"
+      },
+      {
+        stageIndex: 2,
+        nodeId: "query_manager",
+        title: "Stage 2: Standalone Query Synthesis",
+        subtitle: "Node: query_manager_node",
+        description: "Converts conversational context into a completely self-contained natural language specification so that downstream SQL generators never suffer from ambiguous pronoun references.",
+        inputPayload: {
+          "corrected_query": "Lucknow paper leak posts count and public reaction summary",
+          "session_log": "[]"
+        },
+        outputPayload: {
+          "query": "Show total post count, sentiment breakdown, and public opinions regarding paper leak incidents in Lucknow district.",
+          "is_standalone": true
+        },
+        decision: "Proceeds directly ➔ check_query_manager"
+      },
+      {
+        stageIndex: 3,
+        nodeId: "check_query_manager",
+        title: "Stage 3: Query Quality & Entity Classification",
+        subtitle: "Node: check_query_manager_node",
+        description: "Strictly checks if the query contains a specific incident/topic that requires bilingual database keyword grounding (has_table_topic = true).",
+        inputPayload: {
+          "query": "Show total post count, sentiment breakdown, and public opinions regarding paper leak incidents in Lucknow district."
+        },
+        outputPayload: {
+          "is_query_correct": true,
+          "has_table_topic": true,
+          "target_topic": "paper leak",
+          "target_district": "Lucknow"
+        },
+        decision: "has_table_topic is TRUE ➔ Routes to keyword_of_post_maker"
+      },
+      {
+        stageIndex: 4,
+        nodeId: "keyword_of_post_maker",
+        title: "Stage 4: Multi-Lingual Synonym & Hashtag Extraction",
+        subtitle: "Node: keyword_of_post_maker_node",
+        description: "Queries MySQL `recycle_search` table for known aliases and uses the LLM to generate both English and Devanagari Hindi search terms.",
+        inputPayload: {
+          "topic": "paper leak"
+        },
+        outputPayload: {
+          "keywords_english": ["paper leak", "exam leak", "RO ARO", "UPPSC leak", "leak paper"],
+          "keywords_hindi": ["पेपर लीक", "परीक्षा लीक", "धांधली", "आंदोलन", "पर्चा लीक"],
+          "hashtags": ["#UPPaperLeak", "#ROARO_PaperLeak", "#PaperLeak"]
+        },
+        decision: "Keywords extracted ➔ Passes to keyword_checker"
+      },
+      {
+        stageIndex: 5,
+        nodeId: "keyword_of_post_maker_and_checker",
+        title: "Stage 5: Keyword Verification & SQL Filter Synthesis",
+        subtitle: "Node: keyword_of_post_maker_and_checker_node",
+        description: "Validates against hallucinations and constructs the SQL WHERE clause string covering both Hindi `topic_title` and English/Hinglish `input_text`.",
+        inputPayload: {
+          "raw_keywords": ["paper leak", "पेपर लीक", "RO ARO", "धांधली"]
+        },
+        outputPayload: {
+          "keyword_combination_string": "(t.topic_title LIKE '%पेपर लीक%' OR a.input_text LIKE '%paper leak%' OR a.input_text LIKE '%RO ARO%' OR a.input_text LIKE '%धांधली%')",
+          "keywords_checked": ["paper leak", "पेपर लीक", "RO ARO", "धांधली"]
+        },
+        decision: "Grounding complete ➔ Routes to table_selector"
+      },
+      {
+        stageIndex: 6,
+        nodeId: "table_selector",
+        title: "Stage 6: Minimal Database Schema Table Selection",
+        subtitle: "Node: table_selector_node",
+        description: "Introspects DB_SCHEMA_YAML to pick ONLY the required tables needed to compute counts, read raw text, and fetch engagement metrics.",
+        inputPayload: {
+          "query": "Show total post count, sentiment breakdown, and public opinions...",
+          "schema": "analyzed_data, topic, post_bank, post_users, category_hierarchy, policestations"
+        },
+        outputPayload: {
+          "selected_tables": ["analyzed_data", "topic", "post_bank"],
+          "reason": "analyzed_data for posts, sentiment & district; topic for incident title matching; post_bank for likes/retweets."
+        },
+        decision: "Tables locked ➔ Routes to generate_sql"
+      },
+      {
+        stageIndex: 7,
+        nodeId: "generate_sql",
+        title: "Stage 7: High-Precision SQL Generation",
+        subtitle: "Node: generate_sql_node",
+        description: "Generates optimal MySQL query with partition pruning, index utilization, district filtering, and proper table joins.",
+        inputPayload: {
+          "selected_tables": ["analyzed_data", "topic", "post_bank"],
+          "filters": "district = 'Lucknow', keywords = paper leak / पेपर लीक"
+        },
+        outputPayload: {
+          "sql": "SELECT t.topic_title, a.post_id, a.input_text, a.sentiment, a.district, a.created_at, a.post_url, p.likes, p.retweets FROM analyzed_data a JOIN topic t ON a.topic_id = t.topic_id LEFT JOIN post_bank p ON a.post_id = p.post_id WHERE a.district = 'Lucknow' AND (t.topic_title LIKE '%पेपर लीक%' OR a.input_text LIKE '%paper leak%' OR a.input_text LIKE '%RO ARO%') AND a.created_at >= '2026-09-01' ORDER BY p.likes DESC LIMIT 50;"
+        },
+        decision: "SQL Generated ➔ Passes to sql_judge"
+      },
+      {
+        stageIndex: 8,
+        nodeId: "sql_judge",
+        title: "Stage 8: SQL Logic & Schema Auditing",
+        subtitle: "Node: sql_judge_node",
+        description: "Validates that all columns, joins, group-by constraints, and date filters match schema reality. If incorrect, triggers immediate table_selector retry.",
+        inputPayload: {
+          "generated_sql": "SELECT t.topic_title, a.post_id, a.input_text..."
+        },
+        outputPayload: {
+          "sql_matches": true,
+          "audit_status": "PASS",
+          "reason": "Columns verified against schema; correct inner join on topic_id and left join on post_id."
+        },
+        decision: "Audit Passed ➔ Routes to is_safe_sql"
+      },
+      {
+        stageIndex: 9,
+        nodeId: "is_safe_sql",
+        title: "Stage 9: Deterministic AST SQL Safety Gate",
+        subtitle: "Node: is_safe_sql_node",
+        description: "Strict deterministic parser verifies that the query is strictly a read-only SELECT statement. Blocks any destructive DDL/DML, multi-statements, or injection attempts.",
+        inputPayload: {
+          "sql_statement": "SELECT t.topic_title, a.post_id..."
+        },
+        outputPayload: {
+          "is_safe": true,
+          "statement_type": "SELECT",
+          "mutation_risk": 0
+        },
+        decision: "Safety Certified ➔ Passes to execute_sql"
+      },
+      {
+        stageIndex: 10,
+        nodeId: "execute_sql",
+        title: "Stage 10: MySQL Database Execution",
+        subtitle: "Node: execute_sql_node",
+        description: "Dispatches the SQL query to the MySQL database. Checks row count and classifies the intent into count vs summary.",
+        inputPayload: {
+          "sql": "SELECT t.topic_title, a.post_id, a.input_text..."
+        },
+        outputPayload: {
+          "row_count": 42,
+          "query_intent": "summary",
+          "sample_rows": [
+            {"post_id": 10928, "sentiment": "Negative", "likes": 1420, "input_text": "लखनऊ में पेपर लीक को लेकर छात्रों का भारी विरोध प्रदर्शन..."},
+            {"post_id": 10931, "sentiment": "Negative", "likes": 980, "input_text": "RO ARO paper leak: Candidates demanding re-exam in Gomti Nagar"}
+          ]
+        },
+        decision: "Data Found (42 rows) & intent = 'summary' ➔ Routes to llm_validator"
+      },
+      {
+        stageIndex: 11,
+        nodeId: "llm_validator",
+        title: "Stage 11: Batch Evidence Extraction & Sentiment Analytics",
+        subtitle: "Node: llm_validator_node",
+        description: "Aggregates the retrieved 42 records, deduplicates repetitive bot posts, and computes exact sentiment proportions and key narrative clusters.",
+        inputPayload: {
+          "total_records": 42,
+          "sentiment_counts": {"Negative": 32, "Neutral": 8, "Positive": 2}
+        },
+        outputPayload: {
+          "sentiment_breakdown": "76.2% Negative, 19.0% Neutral, 4.8% Positive",
+          "key_locations_mentioned": ["Gomti Nagar", "Hazratganj", "UPPSC Head Office"],
+          "top_themes": ["Demand for CBI Investigation", "Protest gatherings", "Calls for re-examination"]
+        },
+        decision: "Synthesis Complete ➔ Passes to judge_and_reason"
+      },
+      {
+        stageIndex: 12,
+        nodeId: "judge_and_reason",
+        title: "Stage 12: Cognitive Reasoning & Evidence Structuring",
+        subtitle: "Node: judge_and_reason_node",
+        description: "Aligns the analyzed metrics with the user's specific questions. Structures temporal timelines, verified quotes, and high-impact social media URLs.",
+        inputPayload: {
+          "structured_evidence": "42 posts, 76% negative sentiment, 3 protest locations identified."
+        },
+        outputPayload: {
+          "reasoning_complete": true,
+          "response_outline": [
+            "1. Total volume: 42 verified posts in Lucknow",
+            "2. Public sentiment: Strongly critical (76% negative)",
+            "3. Key concerns: Demands for re-examination and strict action against mafias",
+            "4. Top viral source references with URLs"
+          ]
+        },
+        decision: "Proceeds ➔ answer_node"
+      },
+      {
+        stageIndex: 13,
+        nodeId: "answer",
+        title: "Stage 13: Response Synthesis & Markdown Formatting",
+        subtitle: "Node: answer_node",
+        description: "Produces the clean, professional, bilingual response formatted with markdown tables, key metrics, and direct post citations.",
+        inputPayload: {
+          "language": "Hindi / Hinglish Friendly",
+          "outline": "..."
+        },
+        outputPayload: {
+          "answer": "लखनऊ जिले में **पेपर लीक (RO/ARO & UPPSC)** से संबंधित कुल **42 पोस्ट्स** डेटाबेस में दर्ज हैं।\n\n### 📊 मुख्य आंकड़े व जनभावना:\n- **कुल पोस्ट्स:** 42\n- **नकारात्मक/आक्रोश:** 76% (32 पोस्ट्स)\n- **तटस्थ/समाचार:** 19% (8 पोस्ट्स)\n- **सकारात्मक:** 5% (2 पोस्ट्स)\n\n### 🗣️ मुख्य जन-मुद्दे:\n1. **पुनः परीक्षा की मांग:** अधिकांश छात्र परीक्षा रद्द कर दोबारा निष्पक्ष परीक्षा कराने की मांग कर रहे हैं।\n2. **विरोध प्रदर्शन:** गोमती नगर और हजरतगंज क्षेत्र में धरना-प्रदर्शन की जानकारी साझा की जा रही है।\n3. **जांच की मांग:** परीक्षा प्राधिकरण पर सख्त कार्रवाई और CBI जांच की मांग प्रमुख है।"
+        },
+        decision: "Draft created ➔ Passes to answer_checker"
+      },
+      {
+        stageIndex: 14,
+        nodeId: "answer_checker",
+        title: "Stage 14: Quality & Anti-Hallucination Audit",
+        subtitle: "Node: answer_checker_node",
+        description: "Final quality assurance check verifying that numbers match SQL results exactly (42 posts), no hallucinated URLs exist, and police tone guidelines are met.",
+        inputPayload: {
+          "draft_answer": "...",
+          "ground_truth_rows": 42
+        },
+        outputPayload: {
+          "answer_feedback": "",
+          "audit_status": "APPROVED",
+          "retry_needed": false
+        },
+        decision: "Verification Passed ➔ Dispatches to User & END"
+      }
+    ];
+
+    const nodeMetadata = {
+      "query_rewriter": {
+        title: "query_rewriter_node",
+        zone: "Query Ingestion",
+        purpose: "Normalizes incoming conversational query, handles history context, and determines if user request requires interactive disambiguation.",
+        codeLocation: "ollamaagent2.py: ~line 1150",
+        stateInputs: ["query", "messages", "last_sql_context"],
+        stateOutputs: ["corrected_query", "needs_clarification", "explain_request"]
+      },
+      "query_manager": {
+        title: "query_manager_node",
+        zone: "Query Ingestion",
+        purpose: "Converts pronoun-heavy conversational follow-ups into standalone, self-contained questions.",
+        codeLocation: "ollamaagent2.py: ~line 1720",
+        stateInputs: ["corrected_query", "messages", "last_sql_context"],
+        stateOutputs: ["query (standalone)", "query_manager_retry_count"]
+      },
+      "check_query_manager": {
+        title: "check_query_manager_node",
+        zone: "Query Ingestion",
+        purpose: "Validates standalone query fidelity and classifies whether bilingual keyword lookup is required (has_table_topic).",
+        codeLocation: "ollamaagent2.py: ~line 1975",
+        stateInputs: ["query", "original_query", "messages"],
+        stateOutputs: ["is_query_correct", "has_table_topic", "needs_clarification"]
+      },
+      "keyword_of_post_maker": {
+        title: "keyword_of_post_maker_node",
+        zone: "Entity Grounding",
+        purpose: "Extracts Hindi/English spellings, hashtags, and synonyms from MySQL recycle_search table.",
+        codeLocation: "ollamaagent2.py: ~line 2120",
+        stateInputs: ["query", "has_table_topic"],
+        stateOutputs: ["keywords", "duck_search_term"]
+      },
+      "go_duck_search": {
+        title: "go_duck_search_node",
+        zone: "Entity Grounding",
+        purpose: "Performs live DuckDuckGo web search fallback for unresolved short-forms or breaking acronyms.",
+        codeLocation: "ollamaagent2.py: ~line 2395",
+        stateInputs: ["duck_search_term"],
+        stateOutputs: ["duck_search_done", "duck_resolved_terms"]
+      },
+      "keyword_of_post_maker_and_checker": {
+        title: "keyword_of_post_maker_and_checker_node",
+        zone: "Entity Grounding",
+        purpose: "Validates keywords against hallucinations and builds optimized SQL OR-combination filter strings.",
+        codeLocation: "ollamaagent2.py: ~line 2550",
+        stateInputs: ["keywords", "query"],
+        stateOutputs: ["keywords_checked", "keyword_combination_string"]
+      },
+      "go_duck_search_verify": {
+        title: "go_duck_search_verify_node",
+        zone: "Entity Grounding",
+        purpose: "Secondary verification search if all initial keywords were dropped.",
+        codeLocation: "ollamaagent2.py: ~line 2760",
+        stateInputs: ["duck_search_verify_term"],
+        stateOutputs: ["duck_search_verify_done"]
+      },
+      "table_selector": {
+        title: "table_selector_node",
+        zone: "MySQL Engine",
+        purpose: "Introspects schema YAML to select minimal database tables needed to answer the query.",
+        codeLocation: "ollamaagent2.py: ~line 2840",
+        stateInputs: ["query", "content_index_hint"],
+        stateOutputs: ["selected_tables", "table_reason"]
+      },
+      "generate_sql": {
+        title: "generate_sql_node",
+        zone: "MySQL Engine",
+        purpose: "Generates optimal SQL query with date partition pruning, joins, and bilingual LIKE filters.",
+        codeLocation: "ollamaagent2.py: ~line 3200",
+        stateInputs: ["query", "selected_tables", "keyword_combination_string"],
+        stateOutputs: ["sql"]
+      },
+      "sql_judge": {
+        title: "sql_judge_node",
+        zone: "MySQL Engine",
+        purpose: "Audits SQL query correctness against database constraints and requirements.",
+        codeLocation: "ollamaagent2.py: ~line 3500",
+        stateInputs: ["sql", "query"],
+        stateOutputs: ["sql_matches", "sql_match_reason"]
+      },
+      "is_safe_sql": {
+        title: "is_safe_sql_node",
+        zone: "MySQL Engine",
+        purpose: "Deterministic AST validator guaranteeing read-only SELECT execution (blocking DDL/DML/injections).",
+        codeLocation: "ollamaagent2.py: ~line 3700",
+        stateInputs: ["sql"],
+        stateOutputs: ["sql (verified safe)"]
+      },
+      "execute_sql": {
+        title: "execute_sql_node",
+        zone: "MySQL Engine",
+        purpose: "Executes SQL on MySQL database and classifies intent into count vs summary. Routes to fallback on 0 rows.",
+        codeLocation: "ollamaagent2.py: ~line 3850",
+        stateInputs: ["sql", "query"],
+        stateOutputs: ["rows", "query_intent", "is_dashboard_query"]
+      },
+      "fallback_decider": {
+        title: "fallback_decider_node",
+        zone: "Fallback Network",
+        purpose: "Decides between Qdrant vector search or Neo4j knowledge graph traversal when MySQL returns 0 rows.",
+        codeLocation: "ollamaagent2.py: ~line 4400",
+        stateInputs: ["query", "fallback_retry_count"],
+        stateOutputs: ["fallback_route"]
+      },
+      "content_index_search": {
+        title: "content_index_search_node",
+        zone: "Fallback Network",
+        purpose: "Searches Qdrant vector database for semantic similarity and extracts matching topic_ids.",
+        codeLocation: "ollamaagent2.py: ~line 4500",
+        stateInputs: ["query"],
+        stateOutputs: ["content_index_hint", "last_topic_ids"]
+      },
+      "neo4j_search": {
+        title: "neo4j_search_node",
+        zone: "Fallback Network",
+        purpose: "Traverses Neo4j graph relationships (Topic -> Post -> User) across districts and categories.",
+        codeLocation: "ollamaagent2.py: ~line 4650",
+        stateInputs: ["last_topic_ids", "query"],
+        stateOutputs: ["neo4j_graph_context"]
+      },
+      "fallbackchecker": {
+        title: "fallbackchecker_node",
+        zone: "Fallback Network",
+        purpose: "Evaluates fallback findings and reinjects topic hints back into table_selector for a smarter MySQL retry.",
+        codeLocation: "ollamaagent2.py: ~line 4800",
+        stateInputs: ["neo4j_graph_context", "content_index_hint"],
+        stateOutputs: ["content_index_hint", "fallback_retry_count"]
+      },
+      "llm_validator": {
+        title: "llm_validator_node",
+        zone: "Synthesis & Audit",
+        purpose: "Batch processes SQL rows, filters duplicate noise, and computes sentiment breakdowns.",
+        codeLocation: "ollamaagent2.py: ~line 4050",
+        stateInputs: ["rows", "query"],
+        stateOutputs: ["validated_sql_context"]
+      },
+      "judge_and_reason": {
+        title: "judge_and_reason_node",
+        zone: "Synthesis & Audit",
+        purpose: "Reasons over numbers vs narrative facts, correlates district trends, and prepares evidence outline.",
+        codeLocation: "ollamaagent2.py: ~line 4200",
+        stateInputs: ["validated_sql_context", "rows", "query"],
+        stateOutputs: ["reasoning"]
+      },
+      "answer": {
+        title: "answer_node",
+        zone: "Synthesis & Audit",
+        purpose: "Synthesizes final conversational response with markdown tables, key statistics, and post URLs.",
+        codeLocation: "ollamaagent2.py: ~line 4300",
+        stateInputs: ["reasoning", "validated_sql_context", "query"],
+        stateOutputs: ["answer"]
+      },
+      "answer_checker": {
+        title: "answer_checker_node",
+        zone: "Synthesis & Audit",
+        purpose: "Final hallucination audit and metric validation before outputting response to user.",
+        codeLocation: "ollamaagent2.py: ~line 4380",
+        stateInputs: ["answer", "rows", "query"],
+        stateOutputs: ["answer_feedback", "answer_retry_count"]
+      }
+    };
+
+    let currentStepIndex = 0;
+    let autoPlayTimer = null;
+
+    function renderStageDetails(index) {
+      const step = executionTrace[index];
+      const box = document.getElementById("stageDetailsBox");
+      
+      // Update active styling on nodes
+      document.querySelectorAll(".node-card").forEach(el => {
+        el.classList.remove("active", "ring-indigo-500", "bg-indigo-900/40", "border-indigo-500");
+      });
+
+      const activeEl = document.getElementById(`node-${step.nodeId}`);
+      if (activeEl) {
+        activeEl.classList.add("active", "ring-indigo-500", "bg-indigo-900/40", "border-indigo-500");
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      box.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-indigo-500 text-white font-mono text-xs font-bold">STAGE ${step.stageIndex} of ${executionTrace.length}</span>
+                <h3 class="text-lg font-bold text-white">${step.title}</h3>
+              </div>
+              <p class="text-xs text-indigo-300 font-mono mt-0.5">${step.subtitle}</p>
+            </div>
+            <div class="px-3 py-1 rounded bg-slate-900 border border-slate-700 text-xs text-slate-300 font-mono">
+              Decision: <strong class="text-emerald-400">${step.decision}</strong>
+            </div>
+          </div>
+
+          <p class="text-sm text-slate-300 leading-relaxed">${step.description}</p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-3.5 space-y-2 shadow-inner">
+              <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Input State Parameters</span>
+                <span class="text-[10px] text-indigo-400 font-mono">STATE_IN</span>
+              </div>
+              <pre class="text-xs text-slate-300 font-mono bg-slate-950 p-2.5 rounded border border-slate-800/80 overflow-x-auto max-h-48 whitespace-pre-wrap">${JSON.stringify(step.inputPayload, null, 2)}</pre>
+            </div>
+
+            <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-3.5 space-y-2 shadow-inner">
+              <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Output State Updates</span>
+                <span class="text-[10px] text-emerald-400 font-mono">STATE_OUT</span>
+              </div>
+              <pre class="text-xs text-slate-300 font-mono bg-slate-950 p-2.5 rounded border border-slate-800/80 overflow-x-auto max-h-48 whitespace-pre-wrap">${JSON.stringify(step.outputPayload, null, 2)}</pre>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Update button states
+      document.getElementById("prevStepBtn").disabled = (index === 0);
+      document.getElementById("nextStepBtn").disabled = (index === executionTrace.length - 1);
+
+      showNodeDetails(step.nodeId);
+    }
+
+    function showNodeDetails(nodeId) {
+      const meta = nodeMetadata[nodeId];
+      if (!meta) return;
+
+      document.getElementById("activeNodeBadge").textContent = nodeId;
+      const content = document.getElementById("nodeDetailContent");
+
+      content.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="space-y-2">
+            <div class="text-xs text-slate-400 font-medium">Pipeline Zone</div>
+            <div class="text-sm font-semibold text-indigo-400">${meta.zone}</div>
+            
+            <div class="text-xs text-slate-400 font-medium pt-2">Source Code Reference</div>
+            <div class="text-xs font-mono text-slate-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">${meta.codeLocation}</div>
+          </div>
+
+          <div class="md:col-span-2 space-y-3">
+            <div>
+              <div class="text-xs text-slate-400 font-medium">Core Responsibilities & Logic</div>
+              <p class="text-xs md:text-sm text-slate-200 mt-1 leading-relaxed">${meta.purpose}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <span class="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Reads From State:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  ${meta.stateInputs.map(k => `<span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">${k}</span>`).join('')}
+                </div>
+              </div>
+              <div>
+                <span class="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Writes To State:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  ${meta.stateOutputs.map(k => `<span class="px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-[11px] font-mono text-emerald-300">${k}</span>`).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function nextStep() {
+      if (currentStepIndex < executionTrace.length - 1) {
+        currentStepIndex++;
+        renderStageDetails(currentStepIndex);
+      } else {
+        stopAutoPlay();
+      }
+    }
+
+    function prevStep() {
+      if (currentStepIndex > 0) {
+        currentStepIndex--;
+        renderStageDetails(currentStepIndex);
+      }
+    }
+
+    function resetSimulation() {
+      stopAutoPlay();
+      currentStepIndex = 0;
+      renderStageDetails(0);
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayTimer) {
+        stopAutoPlay();
+      } else {
+        document.getElementById("playIcon").textContent = "⏸";
+        document.getElementById("playText").textContent = "Pause";
+        autoPlayTimer = setInterval(() => {
+          if (currentStepIndex < executionTrace.length - 1) {
+            nextStep();
+          } else {
+            resetSimulation();
+          }
+        }, 3000);
+      }
+    }
+
+    function stopAutoPlay() {
+      if (autoPlayTimer) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+        document.getElementById("playIcon").textContent = "▶";
+        document.getElementById("playText").textContent = "Auto Play";
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener("DOMContentLoaded", () => {
+      renderStageDetails(0);
+    });
+  </script>
+</body>
+</html>
+

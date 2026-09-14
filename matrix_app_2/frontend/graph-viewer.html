@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Graph — Multi Topic Analysis</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="stylesheet" href="/static/css/variables.css">
+<link rel="stylesheet" href="/static/css/network.css">
+<style>
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #0f172a;
+        font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    #page {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    #topbar {
+        flex-shrink: 0;
+        padding: 12px 18px;
+        background: #111827;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        color: #e2e8f0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    #network-graph-container {
+        flex: 1;
+        height: auto;
+        border-radius: 0;
+    }
+    .network-node-info {
+        margin: 12px 18px;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+</style>
+</head>
+<body>
+<div id="page">
+    <div id="topbar">🔗 Network Graph — opened from Multi Topic Analysis</div>
+    <div id="network-graph-container" class="network-graph-container"></div>
+</div>
+
+<script src="/static/js/network_graph.js"></script>
+<script>
+    // Data is handed off from the main app tab via localStorage (see the
+    // "open in new tab" button in network_graph.js's buildNetworkGraph) —
+    // there's no server-side persistence of graph data, this is purely a
+    // same-origin, same-browser handoff.
+    (function() {
+        const raw = localStorage.getItem("_networkGraphViewerData");
+        if (!raw) {
+            document.getElementById("network-graph-container").innerHTML =
+                '<div class="network-empty" style="color:#94a3b8;padding-top:60px;">No graph data found. Open this from the "Open in new tab" button on a graph in Multi Topic Analysis.</div>';
+            return;
+        }
+        try {
+            const data = JSON.parse(raw);
+            window.buildNetworkGraph(data);
+        } catch (e) {
+            document.getElementById("network-graph-container").innerHTML =
+                '<div class="network-empty" style="color:#94a3b8;padding-top:60px;">Error loading graph data.</div>';
+            console.error(e);
+        }
+    })();
+</script>
+</body>
+</html>

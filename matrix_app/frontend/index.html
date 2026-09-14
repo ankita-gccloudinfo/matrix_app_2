@@ -1,0 +1,2048 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Police Intel Assistant</title>
+    <!-- Apply the saved theme before first paint to avoid a flash -->
+    <script>
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
+    </script>
+    <link rel="stylesheet" href="/static/css/variables.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="/static/css/topbar.css">
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <link rel="stylesheet" href="/static/css/history.css">
+    <link rel="stylesheet" href="/static/css/map.css">
+    <link rel="stylesheet" href="/static/css/feed.css">
+    <link rel="stylesheet" href="/static/css/network.css">
+    <link rel="stylesheet" href="/static/css/charts.css">
+    <link rel="stylesheet" href="/static/css/settings.css">
+    <link rel="stylesheet" href="/static/css/suggestions.css">
+    <link rel="stylesheet" href="/static/css/related.css">
+    <link rel="stylesheet" href="/static/css/trace.css">
+    <link rel="stylesheet" href="/static/css/avatar-widget.css">
+    <!-- All @media (max-width: 768px/380px) rules for the files above live
+         here instead, so this must stay last to win the cascade. -->
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/js/resizer.js"></script>
+
+    <style>
+        .report-panel {
+            position: fixed; top: 0; right: 0; height: 100vh; width: 45%;
+            min-width: 420px; max-width: 900px; background: #0f172a;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5); z-index: 9000;
+            display: flex; flex-direction: column; transform: translateX(calc(100% + 20px));
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .report-panel.open { transform: translateX(0); }
+        .report-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+        .report-panel-title { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 16px; font-weight: 500; }
+        .report-panel-title h3 { margin: 0; font-size: 16px; font-weight: 500; }
+        .report-panel-actions { display: flex; align-items: center; gap: 4px; }
+        .report-panel-actions button {
+            background: none; border: none; color: #94a3b8; cursor: pointer;
+            padding: 8px; border-radius: 8px; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .report-panel-actions button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .report-panel-body { flex: 1; overflow: hidden; }
+        .report-panel-body iframe { width: 100%; height: 100%; border: none; background: #000; }
+        .report-panel-backdrop {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5); z-index: 8999;
+            opacity: 0; visibility: hidden; transition: all 0.3s ease;
+        }
+        .report-panel-backdrop.open { opacity: 1; visibility: visible; }
+    </style>
+</head>
+
+<body>
+    <!-- Location Splash Overlay -->
+    <div class="loc-splash" id="locSplash">
+        <div class="loc-splash-bg"></div>
+        <div class="loc-splash-map" id="locSplashMap"></div>
+        <div class="loc-splash-vignette"></div>
+        <div class="loc-radar">
+            <div class="loc-radar-ring loc-radar-ring-1"></div>
+            <div class="loc-radar-ring loc-radar-ring-2"></div>
+            <div class="loc-radar-ring loc-radar-ring-3"></div>
+            <div class="loc-radar-dot"></div>
+        </div>
+        <div class="loc-splash-status" id="locSplashStatus">Detecting your location...</div>
+        <div class="loc-splash-name" id="locSplashName"></div>
+    </div>
+
+    <!-- PDF Expert Avatar Widget — persistent bottom-right bubble, no full-screen
+         takeover. Talking to it reuses the main search bar (userInput/micBtn)
+         below instead of a dedicated mic — see the avatar module script. -->
+    <div class="avatar-widget" id="avatarWidget">
+        <div class="avatar-widget-panel" id="avatarWidgetPanel">
+            <div class="avatar-widget-header">
+                <select class="avatar-expert-select" id="avatarExpertSelect" hidden></select>
+                <span class="avatar-widget-title" id="avatarWidgetTitle">Avatar</span>
+                <button class="avatar-widget-close" id="avatarWidgetClose" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <video id="avatarVideo" class="avatar-widget-video" autoplay playsinline></video>
+            <div class="avatar-widget-status" id="avatarStatus">Tap the button to connect</div>
+            <div class="avatar-expert-assign" id="avatarExpertAssign" hidden></div>
+        </div>
+        <button class="avatar-widget-bubble" id="avatarWidgetBubble" title="Talk to Avatar">
+            <i data-lucide="user-round"></i>
+        </button>
+    </div>
+
+    <!-- Related Links Panel (auto-opens with topics/links related to the last query) -->
+    <aside class="related-panel" id="relatedPanel">
+        <div class="related-panel-header">
+            <div class="related-panel-title">
+                <i data-lucide="link-2" style="width:18px;height:18px;color:#3b82f6;"></i>
+                <h3>Related Links</h3>
+            </div>
+            <button class="close-related-btn" id="closeRelatedBtn" title="Close">
+                <i data-lucide="x" style="width:18px;height:18px;"></i>
+            </button>
+        </div>
+        <div class="related-list" id="relatedList">
+            <div class="related-panel-empty">Ask a question to see related links.</div>
+        </div>
+    </aside>
+
+    <!-- Agent Workflow Panel — LangGraph live graph trace -->
+    <aside class="trace-panel" id="tracePanel">
+        <div class="trace-panel-header">
+            <div class="trace-panel-title">
+                <div class="trace-logo">🧠</div>
+                <div>
+                    <h3>Agent Workflow</h3>
+                    <p>Live LangGraph execution trace</p>
+                </div>
+            </div>
+            <div class="trace-panel-actions">
+                <button id="refreshTraceBtn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+                <button id="closeTraceBtn" title="Close"><i data-lucide="x"></i></button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="trace-legend">
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#4f8ef7"></div>Core</div>
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#10b981"></div>SQL</div>
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#ef4444"></div>Safety</div>
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#8b5cf6"></div>Qdrant</div>
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#f59e0b"></div>PDF</div>
+        </div>
+
+        <!-- Step counter -->
+        <div class="trace-step-counter" id="traceStepCounter" style="display:none">
+            <span>Click a node to see its I/O</span>
+            <span><strong id="traceStepCount">0</strong> steps</span>
+        </div>
+
+        <!-- Scrollable area -->
+        <div class="trace-list" id="traceList">
+            <div class="trace-panel-empty">Ask a question to see the agent's workflow graph.</div>
+        </div>
+
+        <!-- Detail drawer (shown on node click) -->
+        <div class="trace-detail-drawer" id="traceDetailDrawer">
+            <div class="trace-drawer-header">
+                <div class="trace-drawer-title">
+                    <span id="traceDrawerEmoji">⚙️</span>
+                    <span id="traceDrawerName">Node</span>
+                    <span class="trace-drawer-badge" id="traceDrawerBadge">—</span>
+                </div>
+                <button class="trace-drawer-close" id="traceDrawerClose" title="Close">
+                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                </button>
+            </div>
+            <div class="trace-drawer-body" id="traceDrawerBody"></div>
+        </div>
+    </aside>
+
+    <!-- Shared trace tooltip -->
+    <div class="trace-tooltip" id="traceTooltip"></div>
+
+
+    <!-- Report Panel Backdrop -->
+    <div class="report-panel-backdrop" id="reportPanelBackdrop"></div>
+
+    <!-- Report Panel (Monitor Dashboard) -->
+    <aside class="report-panel" id="reportPanel">
+        <div class="report-panel-header">
+            <div class="report-panel-title">
+                <i data-lucide="activity" style="width:18px;height:18px;color:#3b82f6;"></i>
+                <h3>Monitor Report</h3>
+            </div>
+            <div class="report-panel-actions">
+                <button id="reportOpenNewTabBtn" title="Open in new tab">
+                    <i data-lucide="external-link" style="width:18px;height:18px;"></i>
+                </button>
+                <button id="closeReportBtn" title="Close">
+                    <i data-lucide="x" style="width:20px;height:20px;"></i>
+                </button>
+            </div>
+        </div>
+        <div class="report-panel-body">
+            <iframe id="reportIframe" title="Monitor Dashboard" src="about:blank"></iframe>
+        </div>
+    </aside>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal-overlay" id="settingsModal">
+        <div class="settings-modal">
+            <div class="settings-modal-header">
+                <h3 data-i18n="settingsTitle">Settings</h3>
+                <button class="modal-close-btn" id="closeSettingsBtn">
+                    <i data-lucide="x" style="width:20px;height:20px;"></i>
+                </button>
+            </div>
+            <div class="settings-modal-body">
+                <!-- Language Setting -->
+                <div class="settings-section">
+                    <label class="settings-label" data-i18n="language">Language</label>
+                    <div class="language-options">
+                        <button class="language-btn active" data-lang="en">
+                            <i data-lucide="globe" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="english">English</span>
+                        </button>
+                        <button class="language-btn" data-lang="hi">
+                            <i data-lucide="globe" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="hindi">हिंदी (Hindi)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Setting -->
+                <div class="settings-section">
+                    <label class="settings-label" data-i18n="theme">Theme</label>
+                    <div class="theme-options">
+                        <button class="theme-btn" data-theme="dark">
+                            <i data-lucide="moon" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="darkMode">Dark Mode</span>
+                        </button>
+                        <button class="theme-btn active" data-theme="light">
+                            <i data-lucide="sun" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="lightMode">Light Mode</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Two-Way Voice Chat Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">2-Way Chat</label>
+                    <label class="settings-toggle-row" for="twoWayChatToggle">
+                        <span>Hands-free voice conversation — mic listens automatically, sends when you stop speaking, and speaks the reply (using the Avatar if open, or the browser's text-to-speech if closed) and listens again.</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="twoWayChatToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                    <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted, #94a3b8);">Speech Recognition Engine:</span>
+                        <select id="voiceEngineSelect" style="background: rgba(255,255,255,0.08); color: inherit; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 4px 8px; font-size: 13px;">
+                            <option value="browser" selected>Browser Native</option>
+                            <option value="selfhosted">Self-Hosted (Nemotron ASR) — experimental</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Related Links Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">Related Links</label>
+                    <label class="settings-toggle-row" for="relatedLinksToggle">
+                        <span>Show related links panel after each question</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="relatedLinksToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Visualization with Chat Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">Visualization with Chat</label>
+                    <label class="settings-toggle-row" for="vizWithChatToggle">
+                        <span>Auto-open graph panel and feed when large results are found</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="vizWithChatToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Feedback (Like/Dislike) Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">Feedback</label>
+                    <label class="settings-toggle-row" for="likeDislikeToggle">
+                        <span>Show like/dislike buttons on chat responses (off by default)</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="likeDislikeToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- PDF Experts Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">PDF Experts</label>
+                    <div id="settingsPdfExpertsEmpty" class="settings-pdf-experts-empty">
+                        Upload PDFs to detect subject experts here.
+                    </div>
+                    <div id="settingsPdfExperts" class="settings-pdf-experts"></div>
+                </div>
+
+                <!-- LiveAvatar API Key Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">LiveAvatar API Key</label>
+                    <input type="password" id="liveAvatarKeyInput" class="settings-text-input"
+                        placeholder="Leave blank to use the server's default key" autocomplete="off">
+                    <div class="settings-hint">
+                        Only used for this tab, for this page load — not saved anywhere,
+                        so it's gone the moment you refresh. Leave blank to keep using
+                        the key already configured on the server.
+                    </div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <span id="settingsSaveStatus" class="settings-save-status"></span>
+                <button class="settings-save-btn" id="saveSettingsBtn">Save to my profile</button>
+                <button class="settings-close-btn" id="closeSettingsBtnFooter" data-i18n="closeModal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile / Login Modal — name-only identification (no password), tied
+         to a MongoDB user profile. Reuses the settings-modal-overlay/-modal
+         classes for visual consistency instead of duplicating that CSS. -->
+    <div class="settings-modal-overlay" id="profileModal">
+        <div class="settings-modal profile-modal">
+            <div class="settings-modal-header">
+                <h3>Profile</h3>
+                <button class="modal-close-btn" id="closeProfileBtn">
+                    <i data-lucide="x" style="width:20px;height:20px;"></i>
+                </button>
+            </div>
+            <div class="settings-modal-body">
+                <!-- Shown when logged out -->
+                <div class="settings-section" id="profileLoggedOutView">
+                    <label class="settings-label">Log in</label>
+                    <div class="settings-hint" style="margin-bottom:10px;">
+                        Enter your name to identify yourself — no password. This
+                        attributes your chat queries in the admin query log and
+                        lets your settings follow you across devices.
+                    </div>
+                    <input type="text" id="profileNameInput" class="settings-text-input" placeholder="Your name" autocomplete="off">
+                    <button class="settings-save-btn" id="profileLoginBtn" style="margin-top:10px;width:100%;">Login</button>
+                </div>
+
+                <!-- Shown when logged in -->
+                <div class="settings-section" id="profileLoggedInView" style="display:none;">
+                    <label class="settings-label">Logged in as</label>
+                    <div class="profile-user-badge">
+                        <span class="profile-user-avatar" id="profileUserAvatar">?</span>
+                        <span id="profileUserName" style="font-weight:600;"></span>
+                        <span id="profileAdminBadge" class="profile-admin-badge" style="display:none;">Admin</span>
+                    </div>
+                    <a href="/query-log" target="_blank" id="profileQueryLogLink" class="settings-save-btn" style="display:none;margin-top:14px;width:100%;text-align:center;text-decoration:none;box-sizing:border-box;">
+                        View Query Log
+                    </a>
+                    <a href="/report-builder" target="_blank" id="profileReportBuilderLink" class="settings-save-btn" style="display:none;margin-top:8px;width:100%;text-align:center;text-decoration:none;box-sizing:border-box;">
+                        Open Report Builder
+                    </a>
+                    <button class="settings-close-btn" id="profileLogoutBtn" style="margin-top:10px;width:100%;">Log out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <aside class="sidebar" id="appSidebar">
+            <div class="top-icons">
+                <button class="icon-btn logo-btn" id="mapBtn" title="Location Map"><i data-lucide="sparkles"></i></button>
+                <button class="icon-btn new-chat-btn" title="New Chat"><i data-lucide="pen-square"></i></button>
+                <button class="icon-btn" id="searchBtn" title="Search"><i data-lucide="search"></i></button>
+                <button class="icon-btn" id="historyBtn" title="Chat History"><i data-lucide="clock"></i></button>
+                <button class="icon-btn" id="feedBtn" title="Social Media Feed"><i data-lucide="newspaper"></i></button>
+                <button class="icon-btn" id="networkBtn" title="Multi Topic Analysis"><i data-lucide="share-2"></i></button>
+                <button class="icon-btn" id="traceBtn" title="Agent Workflow"><i data-lucide="workflow"></i></button>
+            </div>
+            <div class="bottom-icons">
+                <button class="icon-btn" id="settingsBtn" title="Settings"><i data-lucide="settings"></i></button>
+                <button class="profile-btn" id="profileBtn" title="Profile / Login">?</button>
+            </div>
+        </aside>
+
+        <aside class="history-panel" id="historyPanel">
+            <div class="history-header">
+                <h3>Chat History</h3>
+                <button class="close-history-btn" id="closeHistoryBtn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+        </aside>
+
+        <aside class="map-panel" id="mapPanel">
+            <div class="map-panel-header">
+                <div class="map-panel-title">
+                    <i data-lucide="map-pin" style="width:18px;height:18px;color:#3b82f6;"></i>
+                    <h3>Location Map</h3>
+                </div>
+                <button class="close-map-btn" id="closeMapBtn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="map-body">
+                <div id="mapContainer" class="map-container"></div>
+                <div class="district-info-card" id="districtInfoCard">
+                    <div class="district-info-icon">
+                        <i data-lucide="navigation" style="width:22px;height:22px;"></i>
+                    </div>
+                    <div class="district-info-text">
+                        <span class="district-info-status" id="districtInfoStatus">Detecting...</span>
+                        <span class="district-info-name" id="districtInfoName">—</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <aside class="feed-panel" id="feedPanel">
+            <div class="feed-panel-header">
+                <div class="feed-panel-title">
+                    <i data-lucide="newspaper" style="width:18px;height:18px;color:#8b5cf6;"></i>
+                    <h3>Social Media Feed</h3>
+                </div>
+                <button class="close-feed-btn" id="closeFeedBtn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="feed-district-label" id="feedDistrictLabel">Detecting district...</div>
+            <div class="feed-list" id="feedList">
+                <div class="feed-loading" id="feedLoading">
+                    <div class="feed-spinner"></div>
+                    <span>Loading posts...</span>
+                </div>
+            </div>
+            <div class="feed-bulk-action" id="feedBulkAction" style="display: none;">
+                <span id="feedSelectedCount">0 selected</span>
+                <button class="feed-analyze-bulk-btn" onclick="sendSelectedToAnalysis()"><i data-lucide="bar-chart-2"></i> Analyze Selected</button>
+            </div>
+        </aside>
+
+        <aside class="network-panel" id="networkPanel">
+            <div class="network-panel-header">
+                <div class="network-panel-title">
+                    <i data-lucide="share-2" style="width:18px;height:18px;color:#3b82f6;"></i>
+                    <h3>Multi Topic Analysis</h3>
+                </div>
+                <button class="close-network-btn" id="closeNetworkBtn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="network-search-bar">
+                <input type="text" id="networkQueryInput" class="network-query-input"
+                       placeholder="e.g. Analyze Yogi Adityanath, or top 20 active users in political handles">
+                <button class="network-analyze-btn" id="networkAnalyzeBtn" title="Analyze"><i data-lucide="search"></i></button>
+            </div>
+            <div class="network-quick-actions">
+                <button class="network-quick-btn" id="networkTop20Btn">Top 20 Topics</button>
+            </div>
+            <div class="network-results" id="networkResults">
+                <div class="network-empty" id="networkEmpty">Search a topic, user, or handle to see its network — or load the top 20 topics above.</div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <!-- Menu trigger for hamburgerDrawer below — hidden on desktop (that
+                     breakpoint keeps reportBtn/hardRefreshBtn inline via .topbar-actions,
+                     see mobile.css), visible only on narrow viewports. -->
+                <button class="icon-btn hamburger-btn" id="hamburgerBtn" title="Menu">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div class="location-badge" id="locationBadge">
+                    <div class="location-badge-pulse" id="locationPulse"></div>
+                    <i data-lucide="map-pin" class="location-badge-icon"></i>
+                    <span class="location-badge-text" id="locationText">Detecting...</span>
+                </div>
+                <!-- IDs unchanged from before so the existing click handlers below
+                     (openReportPanel / hard refresh) keep working regardless of
+                     whether this renders inline (desktop) or inside the
+                     topbarDropdownMenu popover (mobile, see mobile.css). -->
+                <div class="topbar-actions" id="topbarActions">
+                    <button class="icon-btn" id="reportBtn" title="Monitor Report">
+                        <i data-lucide="activity"></i>
+                        <span class="topbar-action-label">Monitor Report</span>
+                    </button>
+                    <button class="icon-btn" id="hardRefreshBtn" title="Refresh (bypass cache)">
+                        <i data-lucide="refresh-cw"></i>
+                        <span class="topbar-action-label">Refresh</span>
+                    </button>
+                    <button class="icon-btn" id="topbarNetworkBtn" title="Multi Topic Analysis">
+                        <i data-lucide="share-2"></i>
+                        <span class="topbar-action-label">Multi Topic Analysis</span>
+                    </button>
+                    <button class="icon-btn" id="topbarSettingsBtn" title="Settings">
+                        <i data-lucide="settings"></i>
+                        <span class="topbar-action-label">Settings</span>
+                    </button>
+                </div>
+                <!-- Opens/closes .topbar-actions as a popover on mobile — hidden on
+                     desktop, where .topbar-actions is always inline instead. -->
+                <button class="icon-btn topbar-dropdown-btn" id="topbarDropdownBtn" title="More options">
+                    <i data-lucide="chevron-down"></i>
+                </button>
+            </header>
+
+            <!-- Hamburger Drawer (mobile) — left slide-out panel opened by hamburgerBtn.
+                 Reuses .new-chat-btn on its item so script.js's existing
+                 document.querySelectorAll('.new-chat-btn') binding wires it up for free. -->
+            <div class="hamburger-drawer-overlay" id="hamburgerDrawerOverlay">
+                <aside class="hamburger-drawer" id="hamburgerDrawer">
+                    <div class="hamburger-drawer-header">
+                        <span class="hamburger-drawer-title">Menu</span>
+                        <button class="modal-close-btn" id="closeHamburgerDrawerBtn">
+                            <i data-lucide="x" style="width:20px;height:20px;"></i>
+                        </button>
+                    </div>
+                    <button class="hamburger-drawer-item new-chat-btn">
+                        <i data-lucide="pen-square"></i>
+                        <span>New Chat</span>
+                    </button>
+                    <!-- Inline chat history — #historyBtn (like the rest of
+                         .sidebar) is hidden on mobile, so this is the only
+                         way to reach past chats there. Reuses the desktop
+                         history panel's .history-list/.history-item* classes
+                         (history.css) for identical styling; populated by
+                         script.js's loadHistory() via window.refreshMobileHistoryDrawer,
+                         called each time this drawer opens. -->
+                    <div class="hamburger-drawer-section-label">Recent Chats</div>
+                    <div class="history-list" id="hamburgerHistoryList"></div>
+                </aside>
+            </div>
+
+            <div class="glow-bg" id="glowBg"></div>
+
+            <div class="content-wrapper" id="contentWrapper">
+                <div class="hero-section" id="heroSection">
+                    <!-- Static fallback for the instant before auth.js's
+                         updateGreetingIdentity() runs; that then overwrites
+                         this with the real name/"Welcome to AI Matrix" — see
+                         auth.js. Overwritten again once location data
+                         arrives (window.refreshGreeting). -->
+                    <h1 class="greeting">Welcome to AI Matrix</h1>
+                </div>
+
+                <div class="chat-container" id="chatContainer">
+                    <div class="messages" id="messages"></div>
+                </div>
+
+                <div class="input-container" id="inputContainer">
+                    <!-- Typing suggestions (filters as the user types) -->
+                    <div class="suggestions-box" id="suggestionsBox" role="listbox" hidden></div>
+                    <div class="input-box">
+                        <input type="file" id="pdfFileInput" accept="application/pdf" multiple style="display: none;">
+                        <button class="icon-btn add-btn" id="addBtn" title="Upload PDF"><i data-lucide="plus"></i></button>
+                        <textarea id="userInput" placeholder="Ask smart SMI..." autocomplete="off" rows="1"></textarea>
+
+                        <div class="input-actions">
+                            <button class="icon-btn mic-btn" id="micBtn"><i data-lucide="mic"></i></button>
+                            <button class="icon-btn send-btn" id="sendBtn" style="display: none;"><i
+                                    data-lucide="send"></i></button>
+                            <button class="icon-btn stop-btn" id="stopBtn" title="Stop generating" style="display: none;"><i
+                                    data-lucide="square"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/network_graph.js"></script>
+    <script src="/static/js/script.js"></script>
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/suggestions.js"></script>
+    <script>
+        lucide.createIcons();
+
+        // Map panel toggle
+        document.getElementById('mapBtn').addEventListener('click', () => window.openMapPanel());
+        document.getElementById('closeMapBtn').addEventListener('click', () => window.closeMapPanel());
+
+        // Topbar dropdown extra actions (Multi Topic Analysis and Settings)
+        document.getElementById('topbarNetworkBtn')?.addEventListener('click', () => {
+            const networkPanel = document.getElementById('networkPanel');
+            networkPanel?.classList.toggle('open');
+        });
+        document.getElementById('topbarSettingsBtn')?.addEventListener('click', () => {
+            window.settingsManager?.open();
+        });
+
+        // Hamburger drawer (mobile top-bar) — left slide-out panel; the
+        // "New Chat" item inside it is wired up for free via script.js's
+        // querySelectorAll('.new-chat-btn'), not here.
+        (function() {
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+            const drawerOverlay = document.getElementById('hamburgerDrawerOverlay');
+            const closeDrawerBtn = document.getElementById('closeHamburgerDrawerBtn');
+
+            function openDrawer() {
+                drawerOverlay?.classList.add('active');
+                // Populate/refresh the inline "Recent Chats" list every time
+                // the drawer opens (script.js, defined inside its own
+                // DOMContentLoaded closure — exposed on window since this
+                // script block runs in a separate scope).
+                window.refreshMobileHistoryDrawer?.();
+            }
+            function closeDrawer() { drawerOverlay?.classList.remove('active'); }
+
+            hamburgerBtn?.addEventListener('click', openDrawer);
+            closeDrawerBtn?.addEventListener('click', closeDrawer);
+            drawerOverlay?.addEventListener('click', (e) => {
+                if (e.target === drawerOverlay) closeDrawer();
+            });
+            // Picking "New Chat" should close the drawer too, not just start
+            // the chat underneath it.
+            drawerOverlay?.querySelectorAll('.hamburger-drawer-item').forEach(item => {
+                item.addEventListener('click', closeDrawer);
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && drawerOverlay?.classList.contains('active')) closeDrawer();
+            });
+        })();
+
+        // Top-bar actions dropdown (mobile) — popover holding
+        // Monitor Report + Refresh, toggled by the chevron button.
+        (function() {
+            const dropdownBtn = document.getElementById('topbarDropdownBtn');
+            const actions = document.getElementById('topbarActions');
+
+            function closeDropdown() { actions?.classList.remove('open'); }
+
+            dropdownBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                actions?.classList.toggle('open');
+            });
+            actions?.querySelectorAll('.icon-btn').forEach(btn => {
+                btn.addEventListener('click', closeDropdown);
+            });
+            document.addEventListener('click', (e) => {
+                if (actions?.classList.contains('open') && !actions.contains(e.target) && e.target !== dropdownBtn) {
+                    closeDropdown();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeDropdown();
+            });
+        })();
+
+        // Report Panel (Monitor Dashboard) — runs as its own process/port
+        // (see server.py's start_vm_monitor), so this points cross-origin
+        // instead of at a same-origin /monitor/ mount.
+        (function() {
+            const REPORT_URL = `${window.location.protocol}//${window.location.hostname}:8790/`;
+            const reportBtn = document.getElementById('reportBtn');
+            const reportPanel = document.getElementById('reportPanel');
+            const reportBackdrop = document.getElementById('reportPanelBackdrop');
+            const closeReportBtn = document.getElementById('closeReportBtn');
+            const reportIframe = document.getElementById('reportIframe');
+            const openNewTabBtn = document.getElementById('reportOpenNewTabBtn');
+
+            function openReportPanel() {
+                if (!reportPanel) return;
+                if (reportIframe && reportIframe.getAttribute('src') === 'about:blank') {
+                    reportIframe.setAttribute('src', REPORT_URL);
+                }
+                reportPanel.classList.add('open');
+                reportBackdrop.classList.add('open');
+            }
+            function closeReportPanel() {
+                if (!reportPanel) return;
+                reportPanel.classList.remove('open');
+                reportBackdrop.classList.remove('open');
+            }
+
+            reportBtn?.addEventListener('click', openReportPanel);
+            closeReportBtn?.addEventListener('click', closeReportPanel);
+            reportBackdrop?.addEventListener('click', closeReportPanel);
+            openNewTabBtn?.addEventListener('click', () => window.open(REPORT_URL, '_blank'));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && reportPanel?.classList.contains('open')) {
+                    closeReportPanel();
+                }
+            });
+        })();
+
+        // Hard-refresh button — a normal location.reload() lets the browser
+        // serve conditional (304) cached copies of /static/* assets, which
+        // is correct but means an edited file won't visibly update until a
+        // manual hard-refresh (Cmd/Ctrl+Shift+R). This re-fetches every
+        // stylesheet/script the page currently has loaded with `cache:
+        // 'no-store'` (skips the HTTP cache entirely, no conditional
+        // request) so they're guaranteed fresh, then reloads.
+        (function() {
+            const hardRefreshBtn = document.getElementById('hardRefreshBtn');
+            hardRefreshBtn?.addEventListener('click', async () => {
+                hardRefreshBtn.disabled = true;
+                hardRefreshBtn.classList.add('spinning');
+                const urls = [...document.querySelectorAll('link[rel="stylesheet"][href], script[src]')]
+                    .map(el => el.href || el.src)
+                    .filter(Boolean);
+                await Promise.all(urls.map(url => fetch(url, { cache: 'no-store' }).catch(() => {})));
+                window.location.reload();
+            });
+        })();
+
+        // Location badge -> feed
+        document.getElementById('locationBadge').addEventListener('click', () => {
+            if (window._detectedDistrict) {
+                const feedPanel = document.getElementById('feedPanel');
+                if (feedPanel) feedPanel.classList.add('open');
+                if (window.loadFeed) window.loadFeed(window._detectedDistrict);
+            } else {
+                window.openMapPanel();
+            }
+        });
+
+        // Feed panel toggle
+        const feedPanel = document.getElementById('feedPanel');
+        const feedBtn = document.getElementById('feedBtn');
+        const closeFeedBtn = document.getElementById('closeFeedBtn');
+
+        feedBtn.addEventListener('click', () => {
+            feedPanel.classList.toggle('open');
+            if (feedPanel.classList.contains('open')) {
+                if (window._lastSQLIds && window._lastSQLIds.length > 0) {
+                    loadSQLFeed(window._lastSQLIds);
+                } else if (window._detectedDistrict) {
+                    loadFeed(window._detectedDistrict);
+                }
+            }
+        });
+        closeFeedBtn.addEventListener('click', () => feedPanel.classList.remove('open'));
+
+        window.loadFeed = loadFeed;
+        window.loadSQLFeed = loadSQLFeed;
+        window._currentFeedOffset = 0;
+
+        // Multi Topic Analysis (network graph) panel toggle
+        const networkPanel = document.getElementById('networkPanel');
+        const networkBtn = document.getElementById('networkBtn');
+        const closeNetworkBtn = document.getElementById('closeNetworkBtn');
+        const networkQueryInput = document.getElementById('networkQueryInput');
+        const networkAnalyzeBtn = document.getElementById('networkAnalyzeBtn');
+        const networkTop20Btn = document.getElementById('networkTop20Btn');
+
+        networkBtn.addEventListener('click', () => networkPanel.classList.toggle('open'));
+        closeNetworkBtn.addEventListener('click', () => networkPanel.classList.remove('open'));
+        networkAnalyzeBtn.addEventListener('click', runNetworkQuery);
+        networkQueryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') runNetworkQuery();
+        });
+        networkTop20Btn.addEventListener('click', loadTop20Topics);
+
+        function setNetworkLoading(message) {
+            document.getElementById('networkResults').innerHTML =
+                `<div class="network-loading"><div class="feed-spinner"></div><span>${message}</span></div>`;
+        }
+
+        function setNetworkMessage(message) {
+            document.getElementById('networkResults').innerHTML = `<div class="network-empty">${message}</div>`;
+        }
+
+        async function runNetworkQuery() {
+            const q = networkQueryInput.value.trim();
+            if (!q) return;
+            setNetworkLoading('Analyzing...');
+            try {
+                const res = await fetch(`/network/agent?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    setNetworkMessage(data.detail || 'Request failed.');
+                    return;
+                }
+                renderNetworkResult(data);
+            } catch (e) {
+                console.error(e);
+                setNetworkMessage('Error running analysis.');
+            }
+        }
+
+        function renderNetworkResult(data) {
+            const results = document.getElementById('networkResults');
+            // Remembered so the Social Connections panel's "← Back" button
+            // (see renderConnectionsPanel below) can return here.
+            window._restoreNetworkView = () => renderNetworkResult(data);
+
+            if (data.type === 'graph' && data.nodes && data.nodes.length > 0) {
+                results.innerHTML = '<div id="network-graph-container" class="network-graph-container"></div>';
+                if (window.buildNetworkGraph) {
+                    window.buildNetworkGraph({ nodes: data.nodes, links: data.links });
+                }
+            } else if (data.type === 'users' && data.rows && data.rows.length > 0) {
+                results.innerHTML = `<div class="network-list">${data.rows.map(renderNetworkUserRow).join('')}</div>`;
+            } else if (data.type === 'posts' && data.rows && data.rows.length > 0) {
+                results.innerHTML = `<div class="network-list">${data.rows.map(renderNetworkPostRow).join('')}</div>`;
+            } else {
+                setNetworkMessage('No results found for that query.');
+            }
+        }
+
+        function renderNetworkUserRow(u) {
+            return `<div class="network-list-item">
+                <div class="network-list-item-title">${u.display_name || u.username || 'Unknown'}</div>
+                <div class="network-list-item-meta">@${u.username || ''} · ${u.platform || ''} · ${u.total_topics_involved || 0} topics, ${u.total_posts_involved || 0} posts</div>
+            </div>`;
+        }
+
+        function renderNetworkPostRow(p) {
+            const timeStr = p.created_at ? new Date(p.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+            return `<div class="network-list-item">
+                <div class="network-list-item-title">${p.topic_title || 'Untitled topic'}</div>
+                <div class="network-list-item-text">${(p.text || '').substring(0, 200)}</div>
+                <div class="network-list-item-meta">${timeStr}</div>
+            </div>`;
+        }
+
+        async function loadTop20Topics() {
+            setNetworkLoading('Loading top 20 topics...');
+            try {
+                const res = await fetch('/topics/top20');
+                const rows = await res.json();
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    setNetworkMessage('No topics found.');
+                    return;
+                }
+                document.getElementById('networkResults').innerHTML =
+                    `<div class="network-list">${rows.map(renderNetworkTopicRow).join('')}</div>`;
+            } catch (e) {
+                console.error(e);
+                setNetworkMessage('Error loading topics.');
+            }
+        }
+
+        function renderNetworkTopicRow(t) {
+            const title = t.topic_title || 'Untitled';
+            return `<div class="network-list-item network-topic-item" onclick="analyzeNetworkTopic(${JSON.stringify(title)})">
+                <div class="network-list-item-title">${title}</div>
+                <div class="network-list-item-meta">${t.total_no_of_post || 0} posts</div>
+            </div>`;
+        }
+
+        window.analyzeNetworkTopic = function(title) {
+            networkQueryInput.value = `Analyze ${title}`;
+            runNetworkQuery();
+        };
+
+        // ── SQL TOPIC CHART ────────────────────────────────────────────────────
+        // Called automatically when large SQL results (>20 rows) open the Network
+        // panel. Fetches the posts by their IDs, groups by topic, and renders
+        // a horizontal bar chart so the officer can see the topic breakdown at a glance.
+        // Clicking a topic row then draws the node graph for just that topic's
+        // posts+users (see _visualizeTopicNetwork below) using this same cached
+        // list — no extra fetch, no independent /network/agent search.
+        window._lastTopicPosts = [];
+        window._lastTopicTotalIDs = 0;
+
+        function renderTopicBreakdown() {
+            const posts = window._lastTopicPosts;
+            const totalIDs = window._lastTopicTotalIDs;
+            const results = document.getElementById('networkResults');
+            if (!posts.length) { setNetworkMessage('No posts to visualize.'); return; }
+
+            // Group by topic
+            const topicMap = {};
+            for (const p of posts) {
+                const t = p.topic || 'Unassigned';
+                topicMap[t] = (topicMap[t] || 0) + 1;
+            }
+            // Sort descending — all topics, no cap
+            const sorted = Object.entries(topicMap)
+                .sort((a, b) => b[1] - a[1]);
+            const maxVal = sorted[0][1];
+
+            // Overview graph's Connection Layers reset to "everything visible"
+            // whenever a fresh post set loads (new chat query resolved).
+            const sentiments = new Set();
+            const platforms = new Set();
+            for (const p of posts) {
+                sentiments.add((p.sentiment || 'neutral').toLowerCase());
+                if (p.userId) platforms.add((p.platform || 'unknown').toLowerCase());
+            }
+            window._overviewLayers = {
+                sentiment: Object.fromEntries([...sentiments].map(s => [s, true])),
+                platform: Object.fromEntries([...platforms].map(p => [p, true]))
+            };
+
+            // Render a clean horizontal bar chart. The topic title is arbitrary
+            // free text (can contain quotes, ampersands, etc.), so it's never
+            // interpolated into an inline onclick="" attribute — that broke
+            // with "Uncaught SyntaxError: Unexpected end of input" whenever a
+            // topic contained a double quote. Instead each row just carries
+            // its index via data-topic-idx and a real listener is attached
+            // below, looking the topic text up from `sorted` by index.
+            const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const barRows = sorted.map(([topic, count], idx) => {
+                const pct = Math.round((count / maxVal) * 100);
+                const displayTopic = topic.length > 45 ? topic.substring(0, 43) + '…' : topic;
+                return `
+                <div class="sql-topic-row" data-topic-idx="${idx}">
+                    <div class="sql-topic-label" title="${escapeHtml(topic)}">${escapeHtml(displayTopic)}</div>
+                    <div class="sql-topic-bar-wrap">
+                        <div class="sql-topic-bar" style="width:${pct}%"></div>
+                        <span class="sql-topic-count">${count}</span>
+                    </div>
+                </div>`;
+            }).join('');
+
+            const layers = window._overviewLayers;
+            const sentimentChecks = Object.keys(layers.sentiment).sort().map(s => `
+                <label class="layer-toggle-row">
+                    <input type="checkbox" data-overview-layer-group="sentiment" data-layer-key="${s}" ${layers.sentiment[s] ? 'checked' : ''}>
+                    <span class="layer-swatch" style="background:${SENTIMENT_LAYER_COLORS[s] || SENTIMENT_LAYER_COLORS.neutral}"></span>
+                    ${capitalize(s)}
+                </label>`).join('');
+
+            const platformChecks = Object.keys(layers.platform).sort().map(p => `
+                <label class="layer-toggle-row">
+                    <input type="checkbox" data-overview-layer-group="platform" data-layer-key="${p}" ${layers.platform[p] ? 'checked' : ''}>
+                    <span class="layer-swatch" style="background:${window.platformLayerColor ? window.platformLayerColor(p) : '#3b82f6'}"></span>
+                    ${capitalize(p)}
+                </label>`).join('');
+
+            // Overview graph (ALL topics + ALL their users, at once) and its
+            // Connection Layers sit above the per-topic bar list, so the
+            // officer sees the whole network before drilling into one topic.
+            results.innerHTML = `
+                <div style="padding: 14px 16px 6px;">
+                    <div style="font-size:13px; font-weight:700; color: var(--text-primary, #111); margin-bottom:4px;">
+                        Topic Breakdown — ${totalIDs} posts
+                    </div>
+                    <div id="overviewSubtitle" style="font-size:11px; color: var(--text-secondary, #6b7280); margin-bottom:8px;"></div>
+                    <div class="connection-layers">
+                        <div class="connection-layers-title">Connection Layers</div>
+                        <div class="connection-layers-group">
+                            <div class="connection-layers-group-label">Sentiment (edge color)</div>
+                            ${sentimentChecks}
+                        </div>
+                        <div class="connection-layers-group">
+                            <div class="connection-layers-group-label">Platform (user color)</div>
+                            ${platformChecks}
+                        </div>
+                    </div>
+                </div>
+                <div id="network-graph-container" class="network-graph-container" style="height:420px;"></div>
+                <div style="padding: 10px 16px 6px;">
+                    <div style="font-size:11px; color: var(--text-secondary, #6b7280); margin-bottom:14px;">
+                        ${sorted.length} topics · Click a row to drill into just that topic's network
+                    </div>
+                    <div class="sql-topic-chart">${barRows}</div>
+                </div>`;
+
+            results.querySelectorAll('input[data-overview-layer-group]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    window._overviewLayers[cb.dataset.overviewLayerGroup][cb.dataset.layerKey] = cb.checked;
+                    renderOverviewGraph();
+                });
+            });
+
+            results.querySelectorAll('.sql-topic-row').forEach(row => {
+                row.addEventListener('click', () => {
+                    const topic = sorted[Number(row.dataset.topicIdx)][0];
+                    window._visualizeTopicNetwork(topic);
+                });
+            });
+
+            renderOverviewGraph();
+        }
+
+        // Builds the all-topics-at-once overview graph: one node per topic and
+        // one node per user across the ENTIRE resolved post set (not just one
+        // topic), filtered by the Connection Layers above. Same one-edge-per
+        // -user-per-topic-per-sentiment shape as the per-topic drill-down graph
+        // (renderTopicNetworkGraph), just spanning every topic simultaneously.
+        function renderOverviewGraph() {
+            const layers = window._overviewLayers;
+            const allPosts = window._lastTopicPosts;
+            const visiblePosts = allPosts.filter(p => {
+                const sentimentOn = layers.sentiment[(p.sentiment || 'neutral').toLowerCase()];
+                const platformOn = p.userId ? layers.platform[(p.platform || 'unknown').toLowerCase()] : true;
+                return sentimentOn && platformOn;
+            });
+
+            const subtitleEl = document.getElementById('overviewSubtitle');
+            if (subtitleEl) {
+                subtitleEl.textContent = `${visiblePosts.length} of ${allPosts.length} posts shown across all topics`;
+            }
+
+            const topicNodesByTitle = new Map();
+            const userNodesById = new Map();
+            const linkByKey = new Map(); // one edge per (user, topic, sentiment)
+
+            for (const p of visiblePosts) {
+                const topicTitle = p.topic || 'Unassigned';
+                let topicNode = topicNodesByTitle.get(topicTitle);
+                if (!topicNode) {
+                    topicNode = {
+                        id: `topic-${topicTitle}`,
+                        name: topicTitle,
+                        label: topicTitle,
+                        type: 'topic',
+                        total_posts: 0,
+                        posts: []
+                    };
+                    topicNodesByTitle.set(topicTitle, topicNode);
+                }
+                topicNode.total_posts++;
+                topicNode.posts.push({ id: p.id, url: p.url, text: p.text, sentiment: (p.sentiment || 'neutral').toLowerCase() });
+
+                if (!p.userId) continue;
+                const uid = String(p.userId);
+                let userNode = userNodesById.get(uid);
+                if (!userNode) {
+                    userNode = {
+                        id: `user-${uid}`,
+                        name: p.displayName || p.username || 'Unknown User',
+                        username: p.username,
+                        platform: p.platform || 'unknown',
+                        followersCount: p.followersCount || 0,
+                        type: 'user',
+                        userPostCount: 0,
+                        posts: []
+                    };
+                    userNodesById.set(uid, userNode);
+                }
+                userNode.userPostCount++;
+                userNode.posts.push({ id: p.id, url: p.url, text: p.text, sentiment: (p.sentiment || 'neutral').toLowerCase() });
+
+                const sentiment = (p.sentiment || 'neutral').toLowerCase();
+                const linkKey = `${uid}|${topicTitle}|${sentiment}`;
+                let link = linkByKey.get(linkKey);
+                if (!link) {
+                    link = { source: `user-${uid}`, target: `topic-${topicTitle}`, weight: 0, sentiment };
+                    linkByKey.set(linkKey, link);
+                }
+                link.weight++;
+            }
+
+            const graphContainer = document.getElementById('network-graph-container');
+            if (!graphContainer) return; // panel navigated away before this ran
+
+            const nodes = [...topicNodesByTitle.values(), ...userNodesById.values()];
+            if (!nodes.length) {
+                graphContainer.innerHTML = '<div class="network-empty">No posts match the selected layers.</div>';
+                return;
+            }
+
+            if (window.buildNetworkGraph) {
+                window.buildNetworkGraph({ nodes, links: Array.from(linkByKey.values()) });
+            }
+        }
+        window._showTopicBreakdown = renderTopicBreakdown;
+
+        window.loadSQLTopicChart = async function(ids) {
+            if (!ids || ids.length === 0) return;
+            const results = document.getElementById('networkResults');
+            results.innerHTML = '<div class="network-loading"><div class="feed-spinner"></div><span>Building topic analysis...</span></div>';
+
+            try {
+                const res = await fetch('/api/sql-posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: ids })
+                });
+                const data = await res.json();
+                const posts = data.posts || [];
+                if (!posts.length) { setNetworkMessage('No posts to visualize.'); return; }
+
+                window._lastTopicPosts = posts;
+                window._lastTopicTotalIDs = ids.length;
+                renderTopicBreakdown();
+            } catch (e) {
+                console.error(e);
+                setNetworkMessage('Error building topic analysis.');
+            }
+        };
+
+        // ── Connection Layers ──────────────────────────────────────────────
+        // Two independent, toggleable edge/node dimensions for the topic
+        // network graph: Sentiment (per-post — rendered as edge color, one
+        // edge per user per sentiment present) and Platform (per-user —
+        // rendered as node color). Both are attributes we already fetch on
+        // every post via /api/sql-posts, so no new backend query is needed.
+        const SENTIMENT_LAYER_COLORS = { positive: '#16a34a', negative: '#dc2626', neutral: '#64748b' };
+        const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+        // Builds a topic->user node graph from the posts already loaded for the
+        // Topic Breakdown (window._lastTopicPosts) — filtered to just the one
+        // topic the officer clicked — and renders it with the same D3 graph
+        // used for manual "Analyze <entity>" searches.
+        window._visualizeTopicNetwork = function(topic) {
+            const postsInTopic = window._lastTopicPosts.filter(p => (p.topic || 'Unassigned') === topic);
+            if (!postsInTopic.length) { setNetworkMessage('No posts to visualize for this topic.'); return; }
+
+            window._topicNetworkTopic = topic;
+            window._topicNetworkPosts = postsInTopic;
+
+            const sentiments = new Set();
+            const platforms = new Set();
+            for (const p of postsInTopic) {
+                sentiments.add((p.sentiment || 'neutral').toLowerCase());
+                if (p.userId) platforms.add((p.platform || 'unknown').toLowerCase());
+            }
+            // Reset to "everything visible" whenever a new topic is opened
+            window._topicNetworkLayers = {
+                sentiment: Object.fromEntries([...sentiments].map(s => [s, true])),
+                platform: Object.fromEntries([...platforms].map(p => [p, true]))
+            };
+
+            renderTopicNetworkPanel();
+        };
+
+        function renderTopicNetworkPanel() {
+            const topic = window._topicNetworkTopic;
+            const layers = window._topicNetworkLayers;
+            // Remembered so the Social Connections panel's "← Back" button
+            // (see renderConnectionsPanel below) can return here.
+            window._restoreNetworkView = renderTopicNetworkPanel;
+
+            const sentimentChecks = Object.keys(layers.sentiment).sort().map(s => `
+                <label class="layer-toggle-row">
+                    <input type="checkbox" data-layer-group="sentiment" data-layer-key="${s}" ${layers.sentiment[s] ? 'checked' : ''}>
+                    <span class="layer-swatch" style="background:${SENTIMENT_LAYER_COLORS[s] || SENTIMENT_LAYER_COLORS.neutral}"></span>
+                    ${capitalize(s)}
+                </label>`).join('');
+
+            const platformChecks = Object.keys(layers.platform).sort().map(p => `
+                <label class="layer-toggle-row">
+                    <input type="checkbox" data-layer-group="platform" data-layer-key="${p}" ${layers.platform[p] ? 'checked' : ''}>
+                    <span class="layer-swatch" style="background:${window.platformLayerColor ? window.platformLayerColor(p) : '#3b82f6'}"></span>
+                    ${capitalize(p)}
+                </label>`).join('');
+
+            const results = document.getElementById('networkResults');
+            results.innerHTML = `
+                <div style="padding: 10px 16px 0;">
+                    <button class="network-quick-btn" onclick="window._showTopicBreakdown()">← Back to Topics</button>
+                    <div style="font-size:13px; font-weight:700; color: var(--text-primary, #111); margin:10px 0 2px;">
+                        ${topic}
+                    </div>
+                    <div id="topicNetworkSubtitle" style="font-size:11px; color: var(--text-secondary, #6b7280); margin-bottom:2px;"></div>
+                    <div class="connection-layers">
+                        <div class="connection-layers-title">Connection Layers</div>
+                        <div class="connection-layers-group">
+                            <div class="connection-layers-group-label">Sentiment (edge color)</div>
+                            ${sentimentChecks}
+                        </div>
+                        <div class="connection-layers-group">
+                            <div class="connection-layers-group-label">Platform (user color)</div>
+                            ${platformChecks}
+                        </div>
+                    </div>
+                </div>
+                <div id="network-graph-container" class="network-graph-container" style="height:320px;"></div>`;
+
+            results.querySelectorAll('input[data-layer-group]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    window._topicNetworkLayers[cb.dataset.layerGroup][cb.dataset.layerKey] = cb.checked;
+                    renderTopicNetworkGraph();
+                });
+            });
+
+            renderTopicNetworkGraph();
+        }
+
+        function renderTopicNetworkGraph() {
+            const topic = window._topicNetworkTopic;
+            const layers = window._topicNetworkLayers;
+            const visiblePosts = window._topicNetworkPosts.filter(p => {
+                const sentimentOn = layers.sentiment[(p.sentiment || 'neutral').toLowerCase()];
+                const platformOn = p.userId ? layers.platform[(p.platform || 'unknown').toLowerCase()] : true;
+                return sentimentOn && platformOn;
+            });
+
+            const subtitleEl = document.getElementById('topicNetworkSubtitle');
+            if (subtitleEl) {
+                subtitleEl.textContent = `${visiblePosts.length} of ${window._topicNetworkPosts.length} posts shown`;
+            }
+
+            // `posts` carries {id, url, text, sentiment} onto each node so
+            // network_graph.js's click-to-pin detail panel can list the
+            // actual source posts (with links) behind a node — the whole
+            // reason to click a node instead of just hovering it.
+            const nodes = [{
+                id: `topic-${topic}`,
+                name: topic,
+                label: topic,
+                type: 'topic',
+                total_posts: visiblePosts.length,
+                posts: visiblePosts.map(p => ({ id: p.id, url: p.url, text: p.text, sentiment: (p.sentiment || 'neutral').toLowerCase() }))
+            }];
+            const userNodesById = new Map();
+            const linkByKey = new Map(); // one edge per user per sentiment, so each sentiment layer is a distinctly colored edge
+
+            for (const p of visiblePosts) {
+                if (!p.userId) continue;
+                const uid = String(p.userId);
+                let userNode = userNodesById.get(uid);
+                if (!userNode) {
+                    userNode = {
+                        id: `user-${uid}`,
+                        name: p.displayName || p.username || 'Unknown User',
+                        username: p.username,
+                        platform: p.platform || 'unknown',
+                        followersCount: p.followersCount || 0,
+                        type: 'user',
+                        userPostCount: 0,
+                        posts: []
+                    };
+                    userNodesById.set(uid, userNode);
+                    nodes.push(userNode);
+                }
+                userNode.userPostCount++;
+                userNode.posts.push({ id: p.id, url: p.url, text: p.text, sentiment: (p.sentiment || 'neutral').toLowerCase() });
+
+                const sentiment = (p.sentiment || 'neutral').toLowerCase();
+                const linkKey = `${uid}|${sentiment}`;
+                let link = linkByKey.get(linkKey);
+                if (!link) {
+                    link = { source: `user-${uid}`, target: `topic-${topic}`, weight: 0, sentiment };
+                    linkByKey.set(linkKey, link);
+                }
+                link.weight++;
+            }
+
+            const graphContainer = document.getElementById('network-graph-container');
+            if (!graphContainer) return; // panel navigated away before this ran
+
+            if (!userNodesById.size) {
+                graphContainer.innerHTML = '<div class="network-empty">No posts match the selected layers.</div>';
+                return;
+            }
+
+            if (window.buildNetworkGraph) {
+                window.buildNetworkGraph({ nodes, links: Array.from(linkByKey.values()) });
+            }
+        }
+
+        // ── Social Connection Layers (Followers/Following/Retweets/Likes/
+        // Quotes/Replies) ────────────────────────────────────────────────
+        // Separate graph mode from the topic<->user Connection Layers above:
+        // draws real user<->user relationship edges fetched from
+        // /network/connections (server-side, backed by profile_network +
+        // post_user_interactions). Reached via the "Expand Connections"
+        // button network_graph.js adds to any user node's detail popup.
+        const CONNECTION_TYPE_LABELS = {
+            follower: 'Followers', following: 'Following',
+            retweet: 'Retweets', like: 'Likes', quote: 'Quotes', reply: 'Replies'
+        };
+        window._connectionLayers = window._connectionLayers || {
+            follower: true, following: true,
+            retweet: false, like: false, quote: false, reply: false
+        };
+        window._connectionDepth = window._connectionDepth || 1;
+
+        window.onExpandUserConnections = function(seedNode) {
+            renderConnectionsPanel(seedNode);
+        };
+
+        function renderConnectionsPanel(seedNode) {
+            window._connectionsSeed = seedNode;
+            const layers = window._connectionLayers;
+
+            const layerChecks = Object.keys(CONNECTION_TYPE_LABELS).map(type => `
+                <label class="layer-toggle-row">
+                    <input type="checkbox" data-connection-layer="${type}" ${layers[type] ? 'checked' : ''}>
+                    <span class="layer-swatch" style="background:${window.connectionTypeColor(type)}"></span>
+                    ${CONNECTION_TYPE_LABELS[type]}
+                </label>`).join('');
+
+            const results = document.getElementById('networkResults');
+            results.innerHTML = `
+                <div style="padding: 10px 16px 0;">
+                    <button class="network-quick-btn" onclick="window._restoreNetworkView && window._restoreNetworkView()">← Back</button>
+                    <div style="font-size:13px; font-weight:700; color: var(--text-primary, #111); margin:10px 0 2px;">
+                        ${seedNode.name || seedNode.username || 'User'} — Social Connections
+                    </div>
+                    <div id="connectionsSubtitle" style="font-size:11px; color: var(--text-secondary, #6b7280); margin-bottom:2px;"></div>
+                    <div class="connection-layers">
+                        <div class="connection-layers-title">Connection Layers</div>
+                        <div class="connection-layers-group">
+                            ${layerChecks}
+                        </div>
+                        <div class="connection-layers-group" style="margin-top:6px;">
+                            <div class="connection-layers-group-label">Depth</div>
+                            <label class="layer-toggle-row"><input type="radio" name="connDepth" value="1" ${window._connectionDepth === 1 ? 'checked' : ''}> 1 hop</label>
+                            <label class="layer-toggle-row"><input type="radio" name="connDepth" value="2" ${window._connectionDepth === 2 ? 'checked' : ''}> 2 hops</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="network-graph-container" class="network-graph-container" style="height:320px;"></div>`;
+
+            results.querySelectorAll('input[data-connection-layer]').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    window._connectionLayers[cb.dataset.connectionLayer] = cb.checked;
+                    loadConnectionsGraph();
+                });
+            });
+            results.querySelectorAll('input[name="connDepth"]').forEach(r => {
+                r.addEventListener('change', (e) => {
+                    window._connectionDepth = parseInt(e.target.value, 10);
+                    loadConnectionsGraph();
+                });
+            });
+
+            loadConnectionsGraph();
+        }
+
+        async function loadConnectionsGraph() {
+            const seedNode = window._connectionsSeed;
+            const graphContainer = document.getElementById('network-graph-container');
+            const subtitleEl = document.getElementById('connectionsSubtitle');
+            if (!graphContainer || !seedNode) return;
+
+            const activeTypes = Object.keys(window._connectionLayers).filter(t => window._connectionLayers[t]);
+            if (!activeTypes.length) {
+                graphContainer.innerHTML = '<div class="network-empty">Select at least one connection layer.</div>';
+                if (subtitleEl) subtitleEl.textContent = '';
+                return;
+            }
+
+            graphContainer.innerHTML = '<div class="network-loading"><div class="feed-spinner"></div><span>Loading connections...</span></div>';
+
+            try {
+                const params = new URLSearchParams({
+                    user_id: seedNode.id,
+                    edge_types: activeTypes.join(','),
+                    depth: window._connectionDepth
+                });
+                const res = await fetch(`/network/connections?${params.toString()}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    graphContainer.innerHTML = `<div class="network-empty">${data.detail || 'Request failed.'}</div>`;
+                    return;
+                }
+                if (subtitleEl) {
+                    subtitleEl.textContent = `${data.stats.totalNodes} nodes, ${data.stats.totalEdges} edges` +
+                        (data.stats.truncated ? ' (truncated)' : '');
+                }
+                if (!data.nodes || data.nodes.length <= 1) {
+                    graphContainer.innerHTML = '<div class="network-empty">No connections found for the selected layers.</div>';
+                    return;
+                }
+                if (window.buildNetworkGraph) {
+                    window.buildNetworkGraph({ nodes: data.nodes, links: data.links });
+                }
+            } catch (e) {
+                console.error(e);
+                graphContainer.innerHTML = '<div class="network-empty">Error loading connections.</div>';
+            }
+        }
+
+        function renderPostCard(p) {
+            const sourceColors = {
+                'social_media': '#1DA1F2', 'news': '#ef4444', 'whatsapp': '#25D366',
+                'media': '#8b5cf6', 'other': '#64748b'
+            };
+            const src = (p.source || 'media').toLowerCase();
+            const dotColor = sourceColors[src] || '#64748b';
+            const sentClass = p.sentiment === 'positive' ? 'positive' : p.sentiment === 'negative' ? 'negative' : 'neutral';
+            const timeStr = p.created_at ? new Date(p.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+            const text = (p.text || '').substring(0, 300);
+            const linkHtml = p.url ? `<a href="${p.url}" target="_blank" rel="noopener" class="feed-card-link">View Source →</a>` : '';
+            const topicHtml = p.topic ? `<span class="feed-badge neutral">${p.topic.substring(0, 40)}</span>` : '';
+            const isSelected = window._selectedForAnalysis && window._selectedForAnalysis.includes(p.id);
+            const checkboxHtml = `<input type="checkbox" class="feed-checkbox" value="${p.id}" onchange="togglePostSelection(this)" ${isSelected ? 'checked' : ''}>`;
+
+            return `<div class="feed-card">
+                <div class="feed-card-header">
+                    <div class="feed-card-source">
+                        ${checkboxHtml}
+                        <span class="feed-card-source-dot" style="background:${dotColor}"></span>${src}
+                    </div>
+                    <span class="feed-card-time">${timeStr}</span>
+                </div>
+                <div class="feed-card-text">${text}</div>
+                <div class="feed-card-footer">
+                    <span class="feed-badge ${sentClass}">${p.sentiment}</span>
+                    ${topicHtml}
+                    ${linkHtml}
+                </div>
+            </div>`;
+        }
+
+        async function loadFeed(district) {
+            const feedList = document.getElementById('feedList');
+            const feedLabel = document.getElementById('feedDistrictLabel');
+            feedLabel.textContent = `📍 ${district} — Recent Posts`;
+            feedList.innerHTML = '<div class="feed-loading"><div class="feed-spinner"></div><span>Loading posts...</span></div>';
+
+            window._currentFeedOffset = 0;
+
+            try {
+                const res = await fetch(`/api/feed?district=${encodeURIComponent(district)}&limit=30&offset=0`);
+                const data = await res.json();
+
+                if (!data.posts || data.posts.length === 0) {
+                    feedList.innerHTML = '<div class="feed-empty">No posts found for this district.</div>';
+                    return;
+                }
+
+                let html = data.posts.map(renderPostCard).join('');
+                if (data.posts.length >= 30) {
+                    html += `<button id="loadMoreFeedBtn" class="feed-analyze-bulk-btn" style="width: 100%; margin-top: 10px; justify-content: center;" onclick="loadMoreFeed('${district}')">Load More</button>`;
+                }
+                feedList.innerHTML = html;
+
+                if (window.lucide) window.lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                feedList.innerHTML = '<div class="feed-empty">Error loading feed.</div>';
+            }
+        }
+
+        window.loadMoreFeed = async function(district) {
+            const btn = document.getElementById('loadMoreFeedBtn');
+            const feedList = document.getElementById('feedList');
+            if (btn) btn.textContent = 'Loading...';
+
+            window._currentFeedOffset += 30;
+
+            try {
+                const res = await fetch(`/api/feed?district=${encodeURIComponent(district)}&limit=30&offset=${window._currentFeedOffset}`);
+                const data = await res.json();
+
+                if (btn) btn.remove();
+
+                if (!data.posts || data.posts.length === 0) return;
+
+                const newHtml = data.posts.map(renderPostCard).join('');
+                feedList.insertAdjacentHTML('beforeend', newHtml);
+
+                if (data.posts.length >= 30) {
+                    feedList.insertAdjacentHTML('beforeend', `<button id="loadMoreFeedBtn" class="feed-analyze-bulk-btn" style="width: 100%; margin-top: 10px; justify-content: center;" onclick="loadMoreFeed('${district}')">Load More</button>`);
+                }
+
+                if (window.lucide) window.lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                if (btn) btn.textContent = 'Error loading more';
+            }
+        };
+
+        async function loadSQLFeed(ids) {
+            const feedList = document.getElementById('feedList');
+            const feedLabel = document.getElementById('feedDistrictLabel');
+            feedLabel.textContent = `📊 Query Results — ${ids.length} Posts`;
+            feedList.innerHTML = '<div class="feed-loading"><div class="feed-spinner"></div><span>Loading posts...</span></div>';
+
+            try {
+                const res = await fetch('/api/sql-posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: ids.slice(0, 500) }) // safety limit
+                });
+                const data = await res.json();
+
+                if (!data.posts || data.posts.length === 0) {
+                    feedList.innerHTML = '<div class="feed-empty">No posts found for this query.</div>';
+                    return;
+                }
+
+                const html = data.posts.map(renderPostCard).join('');
+                feedList.innerHTML = html;
+
+                if (window.lucide) window.lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                feedList.innerHTML = '<div class="feed-empty">Error loading feed.</div>';
+            }
+        }
+
+        window._selectedForAnalysis = [];
+
+        window.togglePostSelection = function(checkbox) {
+            const id = checkbox.value;
+            if (checkbox.checked) {
+                if (!window._selectedForAnalysis.includes(id)) {
+                    window._selectedForAnalysis.push(id);
+                }
+            } else {
+                window._selectedForAnalysis = window._selectedForAnalysis.filter(selectedId => selectedId !== id);
+            }
+            updateBulkActionBar();
+        };
+
+        function updateBulkActionBar() {
+            const bulkAction = document.getElementById('feedBulkAction');
+            const countSpan = document.getElementById('feedSelectedCount');
+            if (window._selectedForAnalysis.length > 0) {
+                bulkAction.style.display = 'flex';
+                countSpan.textContent = `${window._selectedForAnalysis.length} selected`;
+            } else {
+                bulkAction.style.display = 'none';
+            }
+        }
+
+        window.sendSelectedToAnalysis = function() {
+            if (window._selectedForAnalysis.length === 0) return;
+            const input = document.getElementById('userInput');
+            if (input) {
+                input.value = `Analyze these ${window._selectedForAnalysis.length} post(s): ${window._selectedForAnalysis.join(', ')}`;
+
+                const feedPanel = document.getElementById('feedPanel');
+                if (feedPanel) feedPanel.classList.remove('open');
+
+                const wrapper = document.getElementById('contentWrapper');
+                if (wrapper && !wrapper.classList.contains('chat-active')) {
+                    wrapper.classList.add('chat-active');
+                }
+
+                // Selection has been handed off to the chat input — clear it
+                // and hide the bulk-action bar, otherwise it keeps floating
+                // (position:fixed on mobile) over the chat/input area even
+                // after the feed panel closes.
+                window._selectedForAnalysis = [];
+                updateBulkActionBar();
+
+                input.focus();
+            }
+        };
+
+        // Renders the rotating greeting stats from window._greetingData using the
+        // current language. Safe to call anytime — no-ops until data exists.
+        window.refreshGreeting = function () {
+            const greetingEl = document.querySelector('.greeting');
+            const d = window._greetingData;
+            if (!greetingEl || !d) return;
+
+            const t = (key, params) => (window.i18n ? window.i18n.t(key, params) : key);
+            const districtSpan = `<span style="color: #3b82f6; font-weight: 600;">${d.districtName}</span>`;
+            const num = (val, color) => `<span style="color: ${color}; font-weight: 600;">${val}</span>`;
+
+            const stats = [
+                t('greetingToday', { district: districtSpan, count: num(d.todayCount, '#10b981') }),
+                t('greetingYesterday', { district: districtSpan, count: num(d.yesterdayCount, '#f59e0b') }),
+                t('greetingWeek', { district: districtSpan, count: num(d.weekCount, '#8b5cf6') })
+            ];
+
+            const idx = window._greetingIndex || 0;
+            const allTime = t('greetingAllTime', { district: d.districtName, count: d.totalCount });
+            greetingEl.innerHTML = `${stats[idx]} <span style="font-size: 0.75em; opacity: 0.8; display: block; margin-top: 8px;">${allTime}</span>`;
+        };
+
+        // === Full-screen location splash flow ===
+        (function locationSplashFlow() {
+            const splash = document.getElementById('locSplash');
+            const statusEl = document.getElementById('locSplashStatus');
+            const nameEl = document.getElementById('locSplashName');
+            const badge = document.getElementById('locationBadge');
+            const badgeText = document.getElementById('locationText');
+            const badgePulse = document.getElementById('locationPulse');
+
+            const splashMap = L.map('locSplashMap', {
+                center: [26.5, 80.5],
+                zoom: 6,
+                zoomControl: false,
+                attributionControl: false,
+                dragging: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                touchZoom: false,
+                keyboard: false
+            });
+
+            // CARTO's old anonymous rastertiles/voyager endpoint now returns
+            // "API KEY REQUIRED" placeholder tiles — see the same fix in map.js.
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                subdomains: 'abc'
+            }).addTo(splashMap);
+
+            function finishSplash(districtName, lat, lng, todayCount = 0, yesterdayCount = 0, weekCount = 0, totalCount = 0) {
+                splashMap.flyTo([lat, lng], 11, { duration: 1.8, easeLinearity: 0.25 });
+
+                setTimeout(() => {
+                    const icon = L.divIcon({
+                        className: 'splash-detected-marker',
+                        html: '<div class="sdm-ring"></div><div class="sdm-ring sdm-ring-2"></div><div class="sdm-dot"></div>',
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
+                    });
+                    L.marker([lat, lng], { icon: icon }).addTo(splashMap);
+                }, 800);
+
+                setTimeout(() => {
+                    nameEl.textContent = districtName;
+                    statusEl.textContent = `Located: ${todayCount} Posts Today`;
+                    splash.classList.add('found');
+                }, 1800);
+
+                setTimeout(() => {
+                    const badgeRect = badge.getBoundingClientRect();
+                    const nameRect = nameEl.getBoundingClientRect();
+                    const dx = badgeRect.left + badgeRect.width / 2 - (nameRect.left + nameRect.width / 2);
+                    const dy = badgeRect.top + badgeRect.height / 2 - (nameRect.top + nameRect.height / 2);
+
+                    nameEl.style.transition = 'all 0.7s cubic-bezier(0.4, 0, 0.2, 1)';
+                    nameEl.style.transform = `translate(${dx}px, ${dy}px) scale(0.3)`;
+                    nameEl.style.opacity = '0';
+
+                    const greetingEl = document.querySelector('.greeting');
+                    if (greetingEl) {
+                        // Stash the data so the greeting can be re-rendered when the
+                        // language changes (see window.refreshGreeting below).
+                        window._greetingData = { districtName, todayCount, yesterdayCount, weekCount, totalCount };
+                        window._greetingIndex = 0;
+
+                        greetingEl.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                        greetingEl.style.transform = 'translateY(0)';
+                        window.refreshGreeting();
+
+                        setInterval(() => {
+                            greetingEl.style.opacity = '0';
+                            greetingEl.style.transform = 'translateY(-8px)';
+
+                            setTimeout(() => {
+                                window._greetingIndex = (window._greetingIndex + 1) % 3;
+                                window.refreshGreeting();
+                                greetingEl.style.transform = 'translateY(8px)';
+
+                                greetingEl.offsetHeight;
+
+                                greetingEl.style.opacity = '1';
+                                greetingEl.style.transform = 'translateY(0)';
+                            }, 400);
+                        }, 4000);
+                    }
+
+                    setTimeout(() => {
+                        window._detectedDistrict = districtName;
+                        badgeText.textContent = districtName;
+                        badge.classList.add('detected');
+                        if (badgePulse) badgePulse.remove();
+                        splash.classList.add('dismiss');
+                        setTimeout(() => {
+                            splashMap.remove();
+                            splash.remove();
+                        }, 600);
+                    }, 500);
+                }, 3200);
+            }
+
+            function failSplash(label) {
+                statusEl.textContent = label;
+                splash.classList.add('found');
+                setTimeout(() => {
+                    badgeText.textContent = label;
+                    badge.classList.add('detected');
+                    if (badgePulse) badgePulse.remove();
+                    splash.classList.add('dismiss');
+                    setTimeout(() => {
+                        splashMap.remove();
+                        splash.remove();
+                    }, 600);
+                }, 1200);
+            }
+
+            if (!navigator.geolocation) {
+                failSplash('Location N/A');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    statusEl.textContent = 'Deducing district...';
+                    try {
+                        const res = await fetch('/api/location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+                        });
+                        const data = await res.json();
+                        const today = data.today_count !== undefined ? data.today_count : 0;
+                        const yesterday = data.yesterday_count !== undefined ? data.yesterday_count : 0;
+                        const week = data.week_count !== undefined ? data.week_count : 0;
+                        const total = data.total_count !== undefined ? data.total_count : 0;
+                        finishSplash(data.district, data.lat, data.lng, today, yesterday, week, total);
+                    } catch (e) {
+                        failSplash('Error');
+                    }
+                },
+                () => failSplash('Location Off'),
+                // enableHighAccuracy:true was the main cost here — it makes
+                // the browser wait for a GPS-grade fix, which this doesn't
+                // need since the result only ever buckets into one of ~46
+                // known UP districts. false uses the much faster wifi/IP-based
+                // fix. timeout dropped from 10s to 3s to match — the district
+                // bucket is coarse enough that this loses no real accuracy.
+                { enableHighAccuracy: false, timeout: 3000 }
+            );
+        })();
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- LiveAvatar integration: main search bar (text or mic) -> /api/chat -->
+    <!-- (your own LLM) -> avatar speaks. Persistent bottom-right widget,   -->
+    <!-- not a modal. When multiple PDF "experts" exist (see               -->
+    <!-- /api/pdf-experts), a switcher lets you pick which one is active — -->
+    <!-- each has its own avatar_id (face) and PDF scope.                  -->
+    <!-- Confirmed real SDK methods (from live console inspection):        -->
+    <!-- start, stop, keepAlive, attach, message, repeat, repeatAudio,     -->
+    <!-- startListening, stopListening, interrupt                         -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <script type="module">
+        import { LiveAvatarSession, SessionEvent } from "https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk/+esm";
+
+        let session = null;
+        let experts = [];          // [{name, filenames, avatar_id}]
+        let activeExpert = null;   // currently selected entry from `experts`, or null (default avatar)
+        let avatarCatalog = null;  // cached /api/avatar-catalog result
+        let widgetOpen = false;
+
+        const widget = document.getElementById('avatarWidget');
+        const bubble = document.getElementById('avatarWidgetBubble');
+        const panel = document.getElementById('avatarWidgetPanel');
+        const closeBtn = document.getElementById('avatarWidgetClose');
+        const avatarVideo = document.getElementById('avatarVideo');
+        const avatarStatus = document.getElementById('avatarStatus');
+        const titleEl = document.getElementById('avatarWidgetTitle');
+        const expertSelect = document.getElementById('avatarExpertSelect');
+        const assignBox = document.getElementById('avatarExpertAssign');
+        const chatContainerEl = document.getElementById('chatContainer');
+        const contentWrapperEl = document.getElementById('contentWrapper');
+
+        // window.liveAvatarApiKeyOverride is set by the Settings panel
+        // (settings.js) — in-memory only, never persisted, so a page refresh
+        // always reverts to the server's .env LIVEAVATAR_API_KEY.
+        function liveAvatarHeaders(extra) {
+            const headers = { ...extra };
+            if (window.liveAvatarApiKeyOverride) {
+                headers['X-LiveAvatar-Key'] = window.liveAvatarApiKeyOverride;
+            }
+            return headers;
+        }
+
+        // ── Step 1+2+3: fetch token, start session, attach video ──
+        async function startAvatarSession(avatarId) {
+            // Trial accounts allow only 1 concurrent session. Always fully
+            // tear down any existing session first, or the new session.start()
+            // call will fail with "Session concurrency limit reached".
+            if (session) {
+                await stopAvatarSession();
+            }
+
+            avatarStatus.textContent = "Connecting to avatar...";
+
+            const tokenRes = await fetch('/api/avatar-token', {
+                method: 'POST',
+                headers: liveAvatarHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(avatarId ? { avatar_id: avatarId } : {})
+            });
+            const tokenData = await tokenRes.json();
+
+            if (!tokenData.token) {
+                avatarStatus.textContent = "Error: could not get avatar token.";
+                console.error('Token fetch failed:', tokenData);
+                return;
+            }
+
+            session = new LiveAvatarSession(tokenData.token, { voiceChat: false });
+            const thisSession = session; // pin this instance — `session` may get reassigned (e.g. switching experts) before the event below fires
+
+            // session.attach() silently no-ops if the remote video/audio tracks
+            // haven't been subscribed yet — calling it right after start()
+            // races that subscription and can leave the video permanently
+            // black. SESSION_STREAM_READY fires once both tracks are actually
+            // available, so attach only then.
+            thisSession.on(SessionEvent.SESSION_STREAM_READY, () => {
+                if (session !== thisSession) return; // superseded by a newer session
+                try {
+                    thisSession.attach(avatarVideo);
+                    avatarStatus.textContent = "Avatar ready — type or speak in the search bar below.";
+                } catch (e) {
+                    console.error('session.attach() failed:', e);
+                    avatarStatus.textContent = "Connected, but video failed to attach.";
+                }
+            });
+
+            try {
+                await session.start();
+            } catch (e) {
+                console.error('session.start() failed:', e);
+                avatarStatus.textContent = "Error starting avatar session.";
+                session = null;
+                return;
+            }
+
+            avatarStatus.textContent = "Connected — waiting for video stream...";
+        }
+
+        async function stopAvatarSession() {
+            if (session) {
+                try {
+                    await session.stop();
+                } catch (e) {
+                    // "Session not found" / already-stopped errors are expected
+                    // if the server already tore it down (e.g. MAX_DURATION_REACHED)
+                    console.warn('stop() failed (likely already stopped):', e.message || e);
+                }
+                session = null;
+            }
+            if (avatarVideo.srcObject) {
+                avatarVideo.srcObject.getTracks().forEach(t => t.stop());
+                avatarVideo.srcObject = null;
+            }
+        }
+
+        // ── The confirmed real "make it speak" call ───────────────
+        // session.repeat(text) makes the avatar speak the exact text
+        // verbatim, bypassing HeyGen's own LLM — exactly what we want
+        // since the final answer already comes from your own LLM.
+        async function speakOnSession(text) {
+            if (!session) throw new Error("No active session");
+            try {
+                // repeat() doesn't replace in-flight/queued speech on its own —
+                // without this, sending a second message while the avatar is
+                // still speaking the first answer just queues the new one
+                // behind it instead of switching to it immediately.
+                try { session.interrupt(); } catch (e) { /* nothing to interrupt yet — fine */ }
+                return await session.repeat(text);
+            } catch (e) {
+                const msg = String(e.message || e);
+                if (msg.includes('not connected') || msg.includes('Session not found')) {
+                    console.warn('[LiveAvatar] Session dropped (likely hit the trial 2-minute cap). Reconnecting once...');
+                    await startAvatarSession(activeExpert?.avatar_id);
+                    if (!session) throw new Error('Reconnect failed');
+                    return await session.repeat(text);
+                }
+                throw e;
+            }
+        }
+
+        // Exposed to script.js: the main search bar's sendMessage() calls this
+        // with the final answer text once streaming finishes, so typing (or
+        // the existing mic button) drives the avatar exactly like speaking to
+        // the old modal's dedicated mic used to.
+        window.avatarSpeakIfActive = async function (text) {
+            if (!widgetOpen || !session || !text) return;
+            avatarStatus.textContent = "Speaking...";
+            try {
+                await speakOnSession(text);
+                avatarStatus.textContent = "Avatar ready — type or speak in the search bar below.";
+            } catch (e) {
+                console.error('avatarSpeakIfActive failed:', e);
+                avatarStatus.textContent = "Error speaking the response.";
+            }
+        };
+
+        // Exposed to script.js: scopes /api/chat's PDF retrieval to only the
+        // active expert's file(s) — unless that expert's scope_mode is "all",
+        // in which case it deliberately searches every PDF uploaded this
+        // session (set per-expert in Settings > PDF Experts).
+        window.getActivePdfScope = function () {
+            if (!widgetOpen || !activeExpert) return null;
+            if (activeExpert.scope_mode === 'all') return null;
+            return activeExpert.filenames;
+        };
+
+        // Exposed to script.js: tells the backend which expert persona to
+        // answer as (see pdf_answer_node), so identity questions ("which
+        // expert are you") get a real answer instead of the generic
+        // assistant framing — independent of scope_mode/pdf_scope above.
+        window.getActiveExpertName = function () {
+            return (widgetOpen && activeExpert) ? activeExpert.name : null;
+        };
+
+        // ── PDF experts: load, render switcher, render avatar-assignment UI ──
+        async function loadAvatarCatalog() {
+            if (avatarCatalog) return avatarCatalog;
+            try {
+                const res = await fetch('/api/avatar-catalog', { headers: liveAvatarHeaders() });
+                const data = await res.json();
+                // Real shape from LiveAvatar: {code, data: {results: [{id, name, ...}]}}
+                avatarCatalog = data?.data?.results || (Array.isArray(data) ? data : []);
+            } catch (e) {
+                console.error('Failed to load avatar catalog:', e);
+                avatarCatalog = [];
+            }
+            return avatarCatalog;
+        }
+
+        async function assignAvatar(expertName, avatarId) {
+            try {
+                await fetch('/api/pdf-experts/assign-avatar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: expertName, avatar_id: avatarId })
+                });
+            } catch (e) {
+                console.error('Failed to assign avatar:', e);
+            }
+            const expert = experts.find(e => e.name === expertName);
+            if (expert) expert.avatar_id = avatarId;
+            renderExperts();
+        }
+
+        function renderExperts() {
+            // Switcher: only useful with more than one expert
+            if (experts.length > 1) {
+                expertSelect.hidden = false;
+                expertSelect.innerHTML = experts.map(e =>
+                    `<option value="${e.name}" ${activeExpert?.name === e.name ? 'selected' : ''}>${e.name}</option>`
+                ).join('');
+            } else {
+                expertSelect.hidden = true;
+            }
+
+            titleEl.textContent = activeExpert ? activeExpert.name : 'Avatar';
+
+            const unassigned = experts.filter(e => !e.avatar_id);
+            if (unassigned.length === 0) {
+                assignBox.hidden = true;
+                assignBox.innerHTML = '';
+                return;
+            }
+
+            assignBox.hidden = false;
+            loadAvatarCatalog().then(catalog => {
+                const options = catalog.map(a =>
+                    `<option value="${a.id}">${a.name || a.id}</option>`
+                ).join('');
+                assignBox.innerHTML = `<div class="avatar-expert-assign-title">Assign a face per expert</div>` +
+                    unassigned.map(e => `
+                        <div class="avatar-expert-assign-row">
+                            <span class="avatar-expert-assign-name">${e.name}</span>
+                            <select data-expert="${e.name}">
+                                <option value="">Choose avatar…</option>
+                                ${options}
+                            </select>
+                        </div>
+                    `).join('');
+
+                assignBox.querySelectorAll('select[data-expert]').forEach(sel => {
+                    sel.addEventListener('change', () => {
+                        if (sel.value) assignAvatar(sel.dataset.expert, sel.value);
+                    });
+                });
+            });
+        }
+
+        async function loadExperts() {
+            try {
+                const res = await fetch('/api/pdf-experts');
+                const data = await res.json();
+                experts = data.experts || [];
+            } catch (e) {
+                console.error('Failed to load PDF experts:', e);
+                experts = [];
+            }
+            // Re-point activeExpert at the freshly fetched object (by name),
+            // not the stale one — otherwise an avatar_id/scope_mode edit made
+            // elsewhere (e.g. Settings) would never reach the active session.
+            activeExpert = (activeExpert && experts.find(e => e.name === activeExpert.name)) || experts[0] || null;
+            renderExperts();
+        }
+
+        // Exposed to the Settings panel: re-syncs this module's expert list
+        // (avatar_id / scope_mode) after an edit made there, without
+        // re-running the (LLM) clustering step.
+        window.refreshPdfExperts = loadExperts;
+
+        // Exposed to script.js: called once a PDF upload batch finishes, so
+        // newly uploaded PDFs get clustered into subject experts right away.
+        window.rebuildPdfExperts = async function () {
+            try {
+                await fetch('/api/pdf-experts/build', { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to build PDF experts:', e);
+            }
+            await loadExperts();
+        };
+
+        expertSelect?.addEventListener('change', async () => {
+            const expert = experts.find(e => e.name === expertSelect.value);
+            if (!expert) return;
+            activeExpert = expert;
+            renderExperts();
+            if (widgetOpen) await startAvatarSession(expert.avatar_id);
+        });
+
+        // ── Widget open/close (persistent bubble, not a full-screen modal) ──
+        // Opening docks the panel into the main #chatContainer (filling it,
+        // like an active chat) instead of leaving it as a small floating
+        // popup — the panel DOM node is moved out of #avatarWidget and back
+        // again on close, since the floating-vs-docked CSS is keyed off the
+        // panel's own .docked class, not its ancestor.
+        function dockPanel() {
+            if (!panel || !chatContainerEl) return;
+            if (contentWrapperEl && !contentWrapperEl.classList.contains('chat-active')) {
+                contentWrapperEl.classList.add('chat-active');
+            }
+            chatContainerEl.classList.add('avatar-docked');
+            chatContainerEl.appendChild(panel);
+            panel.classList.add('docked');
+        }
+
+        function undockPanel() {
+            if (!panel || !panel.classList.contains('docked')) return;
+            panel.classList.remove('docked');
+            chatContainerEl?.classList.remove('avatar-docked');
+            // Restore the panel as the bubble's sibling inside #avatarWidget,
+            // ahead of the bubble, matching the original markup order.
+            widget.insertBefore(panel, bubble);
+        }
+
+        async function openWidget() {
+            widgetOpen = true;
+            widget.classList.add('open');
+            dockPanel();
+            await loadExperts();
+            await startAvatarSession(activeExpert?.avatar_id);
+        }
+
+        async function closeWidget() {
+            widgetOpen = false;
+            widget.classList.remove('open');
+            undockPanel();
+            await stopAvatarSession();
+        }
+
+        // Exposed to script.js so it can decide, when a response finishes,
+        // whether the avatar will speak it (skip the browser TTS fallback
+        // used for hands-free two-way mode) — see setTwoWayChatEnabled.
+        window.isAvatarWidgetOpen = () => widgetOpen;
+
+        // Exposed to script.js for barge-in: called the instant the mic
+        // hears the user start talking over the avatar's current reply, so
+        // it can be cut off immediately instead of finishing first.
+        window.avatarInterruptIfActive = function () {
+            if (!widgetOpen || !session) return;
+            try { session.interrupt(); } catch (e) { /* nothing to interrupt — fine */ }
+        };
+
+        bubble?.addEventListener('click', () => {
+            widgetOpen ? closeWidget() : openWidget();
+        });
+        closeBtn?.addEventListener('click', closeWidget);
+
+        // Best-effort: pick up any experts already built from an earlier
+        // upload in this session (e.g. page reload) without opening the widget.
+        loadExperts();
+    </script>
+</body>
+</html>

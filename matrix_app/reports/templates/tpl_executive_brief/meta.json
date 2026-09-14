@@ -1,0 +1,21 @@
+{
+  "template_id": "tpl_executive_brief",
+  "display_name": "Executive Brief",
+  "source_file": "template_1_executive_brief.html",
+  "tags": [
+    "executive",
+    "brief",
+    "formal",
+    "leadership",
+    "overview",
+    "short",
+    "summary",
+    "clean",
+    "minimal",
+    "official",
+    "quick",
+    "officer"
+  ],
+  "description": "Clean, light-themed executive summary with high-level KPI cards, overview, and sentiment breakdown.",
+  "curated": true
+}

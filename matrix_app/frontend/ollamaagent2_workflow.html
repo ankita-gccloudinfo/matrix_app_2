@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OllamaAgent2 LangGraph Workflow Analyzer</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS (via CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            950: '#0b0f19',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #f1f5f9;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.45);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .glass-card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card-hover:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 12px 40px 0 rgba(56, 189, 248, 0.08);
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.5);
+        }
+        
+        /* Node graph styling */
+        .node-rect {
+            transition: all 0.3s ease;
+            fill: #1e293b;
+            stroke: #475569;
+            stroke-width: 1.5;
+        }
+        .node-rect.active {
+            stroke-width: 3px;
+            filter: drop-shadow(0 0 12px var(--glow-color));
+        }
+        .edge-path {
+            fill: none;
+            stroke: #334155;
+            stroke-width: 1.5;
+            transition: all 0.3s ease;
+        }
+        .edge-path.active {
+            stroke: var(--active-color);
+            stroke-width: 3.5;
+            stroke-dasharray: 8 4;
+            animation: dash 20s linear infinite;
+        }
+        .edge-label-bg {
+            fill: #0b0f19;
+            opacity: 0.85;
+            rx: 3;
+        }
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -1000;
+            }
+        }
+        .node-pulse {
+            animation: pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: .6;
+                transform: scale(1.02);
+            }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden">
+
+    <!-- Header bar -->
+    <header class="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+            <!-- Icon -->
+            <div class="p-2 bg-sky-500/10 rounded-lg border border-sky-500/20">
+                <svg class="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-100 flex items-center gap-2">
+                    OllamaAgent2
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">LangGraph Active</span>
+                </h1>
+                <p class="text-xs text-slate-400">Interactive visual workflow of the UP Police Social Media Monitoring Agent</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <!-- Portability indicator -->
+            <div class="text-xs text-slate-400 flex items-center gap-1.5 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                FastAPI Path: <span class="font-mono text-slate-300">/static/ollamaagent2_workflow.html</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Side: Interactive Node Diagram -->
+        <section class="flex-1 flex flex-col bg-slate-950 p-6 relative overflow-hidden border-r border-slate-800">
+            <div class="flex items-center justify-between mb-4 z-10">
+                <div class="flex items-center gap-4">
+                    <span class="text-sm font-semibold text-slate-300 uppercase tracking-wider">LangGraph Architecture Map</span>
+                    <!-- Map Legends -->
+                    <div class="flex items-center gap-3 text-xs">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-fuchsia-500"></span>Entry/Exit</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-sky-500"></span>Router/Logic</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-500"></span>DB/SQL Gen</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-amber-500"></span>Validation</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-orange-500"></span>PDF RAG</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="zoom-fit-btn" class="px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition" title="Zoom Fit">
+                        Fit Screen
+                    </button>
+                </div>
+            </div>
+
+            <!-- SVG Container -->
+            <div class="flex-1 relative border border-slate-800/80 rounded-xl bg-slate-900/40 overflow-auto flex items-center justify-center p-2">
+                <svg id="workflow-svg" viewBox="0 0 1380 720" class="w-full h-full max-h-[700px] select-none">
+                    <!-- Definitions for Arrows -->
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#475569" />
+                        </marker>
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--active-color, #38bdf8)" />
+                        </marker>
+                    </defs>
+
+                    <!-- Connections (Edges) -->
+                    <!-- Standard flow -->
+                    <path id="edge-start-rewriter" d="M 80,220 L 135,220" class="edge-path" marker-end="url(#arrow)" />
+
+                    <path id="edge-rewriter-manager" d="M 265,220 L 295,220" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Explain / needs-clarification shortcut -->
+                    <path id="edge-rewriter-explain" d="M 200,245 C 200,310 130,390 85,390" class="edge-path" marker-end="url(#arrow)" />
+
+                    <path id="edge-manager-router" d="M 425,220 L 460,220" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Router forks -->
+                    <path id="edge-router-pdf" d="M 580,220 C 600,180 610,100 620,100" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-router-db" d="M 580,220 C 600,260 610,320 620,320" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- PDF path -->
+                    <path id="edge-pdf-search-answer" d="M 740,100 L 800,100" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-pdf-answer-end" d="M 860,75 C 860,35 60,35 60,370" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- DB Pipeline -->
+                    <path id="edge-db-build" d="M 765,320 L 810,320" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-build-judge" d="M 930,320 L 975,320" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- SQL Judge routes -->
+                    <path id="edge-judge-safe" d="M 1050,347.5 L 1050,415" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-judge-retry" d="M 1050,292.5 C 1050,250 680,250 680,290" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- is_safe_sql -> execute_sql (single unconditional edge — unsafe SQL is cleared in-node, not re-routed) -->
+                    <path id="edge-safe-execute" d="M 1050,465 C 1050,500 870,500 870,535" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Execute SQL routes -->
+                    <path id="edge-execute-fallback" d="M 870,535 L 870,467.5" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-execute-val" d="M 810,560 L 755,560" class="edge-path" marker-end="url(#arrow)" />
+                    <path id="edge-execute-judge" d="M 810,560 C 750,610 650,610 590,560" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Content Index fallback loops back into table_selector, not straight to generate_sql -->
+                    <path id="edge-fallback-rebuild" d="M 800,440 C 720,440 680,400 700,352" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- LLM Validator -> Judge -->
+                    <path id="edge-llmval-judge" d="M 625,560 L 590,560" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Judge and Reason -> Answer (always — no retry branch back to table_selector any more) -->
+                    <path id="edge-judge-answer" d="M 450,560 L 415,560" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Answer -> End -->
+                    <path id="edge-answer-end" d="M 305,560 C 230,560 130,460 100,390" class="edge-path" marker-end="url(#arrow)" />
+
+                    <!-- Labels on edges -->
+                    <g transform="translate(160, 310)" class="text-[9px] fill-slate-400 font-mono">
+                        <rect x="-48" y="-8" width="96" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">explain_request / clarify</text>
+                    </g>
+                    <g transform="translate(630, 160)" class="text-[10px] fill-slate-400 font-mono">
+                        <rect x="-25" y="-8" width="50" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">pdf_chat</text>
+                    </g>
+                    <g transform="translate(630, 270)" class="text-[10px] fill-slate-400 font-mono">
+                        <rect x="-25" y="-8" width="50" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">database</text>
+                    </g>
+                    <g transform="translate(1050, 385)" class="text-[10px] fill-slate-400 font-mono">
+                        <rect x="-20" y="-8" width="40" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">Match</text>
+                    </g>
+                    <g transform="translate(865, 268)" class="text-[9px] fill-rose-400 font-mono">
+                        <rect x="-52" y="-8" width="104" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">Mismatch (retry, max 2)</text>
+                    </g>
+                    <g transform="translate(870, 500)" class="text-[10px] fill-slate-400 font-mono">
+                        <rect x="-20" y="-8" width="40" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">0 rows</text>
+                    </g>
+                    <g transform="translate(782, 552)" class="text-[9px] fill-slate-400 font-mono">
+                        <rect x="-20" y="-8" width="40" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">summary</text>
+                    </g>
+                    <g transform="translate(700, 605)" class="text-[9px] fill-slate-400 font-mono">
+                        <rect x="-20" y="-8" width="40" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">count</text>
+                    </g>
+                    <g transform="translate(760, 397)" class="text-[9px] fill-violet-300 font-mono">
+                        <rect x="-45" y="-8" width="90" height="15" class="edge-label-bg" />
+                        <text text-anchor="middle" y="3">retry (max 2)</text>
+                    </g>
+
+                    <!-- Nodes -->
+                    <!-- START Node -->
+                    <g id="node-START" class="node-group cursor-pointer" onclick="selectNode('START')">
+                        <rect x="20" y="200" width="80" height="40" rx="8" class="node-rect" style="--glow-color: rgba(217, 70, 239, 0.4); fill: rgba(24, 24, 37, 0.95); stroke: #d946ef;" />
+                        <text x="60" y="225" text-anchor="middle" fill="#f472b6" class="text-xs font-bold font-mono">START</text>
+                    </g>
+
+                    <!-- Query Rewriter Node -->
+                    <g id="node-query_rewriter" class="node-group cursor-pointer" onclick="selectNode('query_rewriter')">
+                        <rect x="135" y="195" width="130" height="50" rx="10" class="node-rect" style="--glow-color: rgba(56, 189, 248, 0.4); stroke: #38bdf8;" />
+                        <text x="200" y="220" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">query_rewriter</text>
+                        <text x="200" y="235" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 664</text>
+                    </g>
+
+                    <!-- Query Manager Node -->
+                    <g id="node-query_manager" class="node-group cursor-pointer" onclick="selectNode('query_manager')">
+                        <rect x="295" y="195" width="130" height="50" rx="10" class="node-rect" style="--glow-color: rgba(56, 189, 248, 0.4); stroke: #38bdf8;" />
+                        <text x="360" y="220" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">query_manager</text>
+                        <text x="360" y="235" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 824</text>
+                    </g>
+
+                    <!-- Router Node -->
+                    <g id="node-router" class="node-group cursor-pointer" onclick="selectNode('router')">
+                        <rect x="460" y="195" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(56, 189, 248, 0.4); stroke: #38bdf8;" />
+                        <text x="520" y="220" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">router</text>
+                        <text x="520" y="235" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 894</text>
+                    </g>
+
+                    <!-- PDF Search Node -->
+                    <g id="node-pdf_search" class="node-group cursor-pointer" onclick="selectNode('pdf_search')">
+                        <rect x="620" y="75" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(251, 146, 60, 0.4); stroke: #fb923c;" />
+                        <text x="680" y="100" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">pdf_search</text>
+                        <text x="680" y="115" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1038</text>
+                    </g>
+
+                    <!-- PDF Answer Node -->
+                    <g id="node-pdf_answer" class="node-group cursor-pointer" onclick="selectNode('pdf_answer')">
+                        <rect x="800" y="75" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(251, 146, 60, 0.4); stroke: #fb923c;" />
+                        <text x="860" y="100" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">pdf_answer</text>
+                        <text x="860" y="115" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1047</text>
+                    </g>
+
+                    <!-- Table Selector Node -->
+                    <g id="node-table_selector" class="node-group cursor-pointer" onclick="selectNode('table_selector')">
+                        <rect x="595" y="290" width="170" height="60" rx="10" class="node-rect" style="--glow-color: rgba(52, 211, 153, 0.4); stroke: #34d399;" />
+                        <text x="680" y="315" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">table_selector</text>
+                        <text x="680" y="333" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1088 (Loop Entry)</text>
+                    </g>
+
+                    <!-- Generate SQL Node -->
+                    <g id="node-generate_sql" class="node-group cursor-pointer" onclick="selectNode('generate_sql')">
+                        <rect x="810" y="295" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(52, 211, 153, 0.4); stroke: #34d399;" />
+                        <text x="870" y="320" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">generate_sql</text>
+                        <text x="870" y="335" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 2163</text>
+                    </g>
+
+                    <!-- SQL Judge Node -->
+                    <g id="node-sql_judge" class="node-group cursor-pointer" onclick="selectNode('sql_judge')">
+                        <rect x="975" y="292.5" width="150" height="55" rx="10" class="node-rect" style="--glow-color: rgba(251, 191, 36, 0.4); stroke: #fbbf24;" />
+                        <text x="1050" y="318" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">sql_judge</text>
+                        <text x="1050" y="333" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1137 (Audit)</text>
+                    </g>
+
+                    <!-- Is Safe SQL Node -->
+                    <g id="node-is_safe_sql" class="node-group cursor-pointer" onclick="selectNode('is_safe_sql')">
+                        <rect x="990" y="415" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(251, 191, 36, 0.4); stroke: #fbbf24;" />
+                        <text x="1050" y="440" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">is_safe_sql</text>
+                        <text x="1050" y="455" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 2205</text>
+                    </g>
+
+                    <!-- Execute SQL Node -->
+                    <g id="node-execute_sql" class="node-group cursor-pointer" onclick="selectNode('execute_sql')">
+                        <rect x="810" y="535" width="120" height="50" rx="10" class="node-rect" style="--glow-color: rgba(52, 211, 153, 0.4); stroke: #34d399;" />
+                        <text x="870" y="560" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">execute_sql</text>
+                        <text x="870" y="575" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 2251 (MySQL)</text>
+                    </g>
+
+                    <!-- Content Index Fallback Node -->
+                    <g id="node-content_index_search" class="node-group cursor-pointer" onclick="selectNode('content_index_search')">
+                        <rect x="800" y="412.5" width="140" height="55" rx="10" class="node-rect" style="--glow-color: rgba(167, 139, 250, 0.4); stroke: #a78bfa;" />
+                        <text x="870" y="438" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">content_index_search</text>
+                        <text x="870" y="453" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 2322 (Qdrant)</text>
+                    </g>
+
+                    <!-- LLM Validator Node -->
+                    <g id="node-llm_validator" class="node-group cursor-pointer" onclick="selectNode('llm_validator')">
+                        <rect x="625" y="535" width="130" height="50" rx="10" class="node-rect" style="--glow-color: rgba(251, 191, 36, 0.4); stroke: #fbbf24;" />
+                        <text x="690" y="560" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">llm_validator</text>
+                        <text x="690" y="575" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1194 (Filter)</text>
+                    </g>
+
+                    <!-- Judge & Reason Node -->
+                    <g id="node-judge_and_reason" class="node-group cursor-pointer" onclick="selectNode('judge_and_reason')">
+                        <rect x="450" y="535" width="140" height="50" rx="10" class="node-rect" style="--glow-color: rgba(251, 191, 36, 0.4); stroke: #fbbf24;" />
+                        <text x="520" y="560" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">judge_and_reason</text>
+                        <text x="520" y="575" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1418 (Reasoning)</text>
+                    </g>
+
+                    <!-- Answer Node -->
+                    <g id="node-answer" class="node-group cursor-pointer" onclick="selectNode('answer')">
+                        <rect x="305" y="535" width="110" height="50" rx="10" class="node-rect" style="--glow-color: rgba(56, 189, 248, 0.4); stroke: #38bdf8;" />
+                        <text x="360" y="560" text-anchor="middle" fill="#e2e8f0" class="text-xs font-semibold">answer</text>
+                        <text x="360" y="575" text-anchor="middle" fill="#94a3b8" class="text-[9px] font-mono">Line 1464</text>
+                    </g>
+
+                    <!-- END Node -->
+                    <g id="node-END" class="node-group cursor-pointer" onclick="selectNode('END')">
+                        <rect x="20" y="370" width="80" height="40" rx="8" class="node-rect" style="--glow-color: rgba(244, 63, 94, 0.4); fill: rgba(24, 24, 37, 0.95); stroke: #f43f5e;" />
+                        <text x="60" y="395" text-anchor="middle" fill="#f43f5e" class="text-xs font-bold font-mono">END</text>
+                    </g>
+                </svg>
+            </div>
+            
+            <!-- Bottom step notification -->
+            <div class="mt-4 px-4 py-3 bg-slate-900/60 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs text-slate-400">
+                <span>💡 Click on any node inside the graph to inspect its logic, inputs, outputs, and line numbers.</span>
+                <span class="font-mono text-slate-500">ollamaagent2.py Workflow Visualizer v2.1</span>
+            </div>
+        </section>
+
+        <!-- Right Side: Details / Simulator Dashboard -->
+        <section class="w-[450px] flex flex-col bg-slate-900 border-l border-slate-800 overflow-hidden">
+            <!-- Tabs Headers -->
+            <div class="flex-shrink-0 flex border-b border-slate-800 bg-slate-950/40 text-sm font-semibold">
+                <button onclick="switchTab('simulator')" id="tab-btn-simulator" class="flex-1 py-3 px-4 text-center border-b-2 border-sky-500 text-sky-400 focus:outline-none transition">
+                    Path Simulator
+                </button>
+                <button onclick="switchTab('inspector')" id="tab-btn-inspector" class="flex-1 py-3 px-4 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 focus:outline-none transition">
+                    Node Inspector
+                </button>
+                <button onclick="switchTab('schema')" id="tab-btn-schema" class="flex-1 py-3 px-4 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 focus:outline-none transition">
+                    State Schema
+                </button>
+            </div>
+
+            <!-- Tab Content Area -->
+            <div class="flex-1 overflow-y-auto p-5 space-y-5">
+                
+                <!-- TAB: Path Simulator -->
+                <div id="tab-content-simulator" class="space-y-4">
+                    <div class="glass-card p-4 rounded-xl space-y-3">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400">Choose Execution Flow</label>
+                        <select id="sim-path-select" onchange="loadSimPath()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+                            <option value="normal-db">1. Normal DB Path (SQL + Summary Audit)</option>
+                            <option value="aggregation-db">2. DB Aggregation Path (Count Intent Bypass)</option>
+                            <option value="fallback-db">3. DB 0-Rows Fallback (Qdrant index hint retry)</option>
+                            <option value="pdf-rag">4. PDF RAG (Unstructured doc search)</option>
+                            <option value="explain-shortcut">5. Explain Answer (Query Rewriter Short-circuit)</option>
+                        </select>
+                        
+                        <!-- Controls -->
+                        <div class="flex items-center gap-2 pt-1">
+                            <button onclick="resetSim()" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition">
+                                Reset
+                            </button>
+                            <button onclick="prevStep()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs transition">
+                                ◀ Prev
+                            </button>
+                            <button onclick="nextStep()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-lg text-xs font-bold text-slate-950 transition">
+                                Next Step ▶
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Step details -->
+                    <div class="glass-card p-4 rounded-xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-sky-400 uppercase tracking-widest">Active Step Info</span>
+                            <span id="sim-step-badge" class="text-[10px] font-mono bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded border border-sky-500/20">Step 0 / 0</span>
+                        </div>
+                        <h3 id="sim-node-title" class="text-md font-bold text-slate-200">Start Simulation</h3>
+                        <p id="sim-node-desc" class="text-xs text-slate-400 leading-relaxed">Select a path above and click "Next Step" to begin walking the LangGraph nodes. The active node, arrows, and state variables will highlight dynamically.</p>
+                    </div>
+
+                    <!-- Live State Monitor -->
+                    <div class="glass-card p-4 rounded-xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Live state Monitor</h4>
+                            <span class="text-[9.5px] font-mono text-slate-500">TypedDict (28 keys)</span>
+                        </div>
+                        <div class="border border-slate-800/80 rounded-lg overflow-hidden bg-slate-950/40 text-xs font-mono">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-900 border-b border-slate-800 text-slate-400">
+                                        <th class="p-2 text-left font-semibold">State Key</th>
+                                        <th class="p-2 text-left font-semibold">Current Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="state-table-body">
+                                    <tr><td colspan="2" class="p-4 text-center text-slate-500 italic">Start simulation to populate state</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: Node Inspector -->
+                <div id="tab-content-inspector" class="space-y-4 hidden">
+                    <div id="inspector-empty" class="text-center py-10 text-slate-500 text-sm">
+                        Click on any node in the diagram to inspect its exact configuration.
+                    </div>
+                    
+                    <div id="inspector-content" class="space-y-4 hidden">
+                        <div class="flex items-center justify-between">
+                            <h3 id="inspect-name" class="text-lg font-bold text-slate-100">node_name</h3>
+                            <span id="inspect-line" class="text-xs font-mono bg-slate-800 px-2.5 py-1 rounded border border-slate-700 text-slate-300">Line XXX</span>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Python Function</span>
+                            <code id="inspect-function" class="text-xs font-mono text-sky-300 block py-1 bg-slate-950 px-2 rounded border border-slate-800">async def name_node(state: State):</code>
+                        </div>
+
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Description & Core Role</span>
+                            <div id="inspect-desc" class="text-xs text-slate-300 leading-relaxed bg-slate-800/40 p-3 rounded-lg border border-slate-800">Node description goes here.</div>
+                        </div>
+
+                        <!-- Read / Write state keys -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Reads from State</span>
+                                <div id="inspect-reads" class="flex flex-wrap gap-1">
+                                    <!-- key badges -->
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Writes/Updates State</span>
+                                <div id="inspect-writes" class="flex flex-wrap gap-1">
+                                    <!-- key badges -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Transition Logic</span>
+                            <p id="inspect-transitions" class="text-xs text-slate-400 bg-slate-950 p-2.5 rounded border border-slate-800 font-mono"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: State Schema -->
+                <div id="tab-content-schema" class="space-y-4 hidden">
+                    <div class="glass-card p-4 rounded-xl space-y-3">
+                        <h3 class="text-sm font-bold text-slate-200">The LangGraph State Dictionary</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">In LangGraph, all data is passed between nodes via a shared State dict. In <code class="font-mono text-slate-300">ollamaagent2.py</code>, this state is a plain <code class="font-mono text-sky-400">TypedDict</code> (28 keys, <code class="font-mono text-slate-300">class State</code> at line 601) — every node reads what it needs via <code class="font-mono text-slate-300">state.get(...)</code> and returns only the partial dict of keys it updates; LangGraph merges that into the shared state before the next node runs.</p>
+                    </div>
+
+                    <div class="space-y-2.5">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">State Keys Dictionary</span>
+                        
+                        <!-- Search schema -->
+                        <input type="text" id="schema-search" oninput="filterSchema()" placeholder="Search state variables..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-sky-500">
+                        
+                        <div id="schema-list" class="space-y-2">
+                            <!-- Schema items -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- JS Logic -->
+    <script>
+        // State Keys documentation — mirrors `class State(TypedDict)` at ollamaagent2.py:601
+        const stateSchema = [
+            { key: "query", type: "str", desc: "Raw text on entry; overwritten by query_manager_node with the final self-contained standalone query. Used across SQL and PDF paths." },
+            { key: "messages", type: "List[Dict]", desc: "In-memory conversation history for this run (conversational memory)." },
+            { key: "corrected_query", type: "str", desc: "Grammar/typo-corrected version of the latest message, written by query_rewriter_node." },
+            { key: "rewrite_context", type: "str", desc: "Plain-text notes from query_rewriter_node on how the latest message relates to prior turns; consumed by query_manager_node." },
+            { key: "route", type: "str", desc: "Destination branch selected by router_node: 'database' or 'pdf_chat'." },
+            { key: "pdf_uploaded", type: "bool", desc: "Indicates if a PDF file is active in this conversation session." },
+            { key: "pdf_filenames", type: "List[str]", desc: "Names of the active PDFs uploaded by the user." },
+            { key: "pdf_results", type: "List[Any]", desc: "Chunks retrieved by pdf_search_node from the uploaded PDF(s)." },
+            { key: "expert_name", type: "str", desc: "Optional persona name (e.g. 'Social Media Expert') adopted by pdf_answer_node." },
+            { key: "selected_tables", type: "List[str]", desc: "Database tables selected by table_selector_node to resolve the query." },
+            { key: "table_reason", type: "str", desc: "Brief explanation for why those tables were selected." },
+            { key: "sql", type: "str", desc: "The MySQL SELECT statement constructed by generate_sql_node." },
+            { key: "sql_matches", type: "bool", desc: "Auditor decision from sql_judge_node on whether the SQL actually answers the query." },
+            { key: "sql_match_reason", type: "str", desc: "Reasoning from the SQL auditor (sql_judge_node)." },
+            { key: "retry_count", type: "int", desc: "SQL planning retry counter, incremented by sql_judge_node on a mismatch. Capped at 2 — once reached, sql_judge passes the SQL through regardless." },
+            { key: "content_index_hint", type: "str", desc: "Table/column hint text from content_index_search_node's Qdrant fallback, fed back into generate_sql_node on the next loop." },
+            { key: "content_index_retry_count", type: "int", desc: "Attempts counter for the content-index fallback loop. Capped at 2 in content_index_search_node." },
+            { key: "rows", type: "List[Any]", desc: "Raw rows returned by execute_sql_node." },
+            { key: "is_dashboard_query", type: "bool", desc: "Declared in State as a flag for the llm_validator branch; currently only ever initialized to False, not set by any node." },
+            { key: "query_intent", type: "str", desc: "'count' or 'summary', classified by execute_sql_node (_classify_sql_query_intent) AFTER rows come back — decides llm_validator vs. straight to judge_and_reason." },
+            { key: "validated_sql_context", type: "str", desc: "Text context assembled by llm_validator_node from LLM-filtered relevant rows." },
+            { key: "reasoning", type: "str", desc: "Plain-text analysis written by judge_and_reason_node over the rows/SQL for this turn." },
+            { key: "answer", type: "str", desc: "The final assistant plain-text answer returned to the user." },
+            { key: "needs_clarification", type: "bool", desc: "Set by query_rewriter_node when the latest message is too ambiguous to act on. Short-circuits straight to END with a clarification question as the answer." },
+            { key: "explain_request", type: "bool", desc: "Set by query_rewriter_node when the user asks how/why the previous answer was produced. Also short-circuits straight to END." },
+            { key: "last_sql_context", type: "str", desc: "Exact SQL + row count from the previous turn's successful execute_sql_node call, read by query_rewriter/query_manager/generate_sql for follow-up grounding." },
+            { key: "session_log", type: "list", desc: "In-memory log of {query, sql, row_count} for every SQL turn this session, searched by query_rewriter_node." },
+            { key: "last_topic_ids", type: "list", desc: "[{topic_id, title}, ...] extracted from the previous turn's SQL rows by execute_sql_node, used to resolve 'this post/topic' references." },
+            { key: "resolved_topic_reference", type: "str", desc: "Exact unique_topic_id resolved by query_rewriter_node when the latest message names a specific prior topic/post; injected as a hard filter by generate_sql_node." },
+            { key: "post_metadata", type: "dict", desc: "post_id -> {url, source} map extracted by execute_sql_node, appended as source links by answer_node." }
+        ];
+
+        // Nodes documentation — synced with ollamaagent2.py's _builder.add_node(...) wiring (around line 2479)
+        const nodesData = {
+            "START": {
+                name: "START",
+                line: "Entry Point",
+                func: "_builder.set_entry_point('query_rewriter')",
+                desc: "The entry point of the LangGraph execution flow. When a message is received from the chat window, the graph state is initialized and execution commences here.",
+                reads: ["messages", "query"],
+                writes: [],
+                trans: "Always forwards directly to query_rewriter."
+            },
+            "query_rewriter": {
+                name: "query_rewriter",
+                line: "664",
+                func: "async def query_rewriter_node(state: State)",
+                desc: "START -> here first, every turn. One LLM call that (1) fixes grammar/typos in the latest message, (2) writes rewrite_context notes on how it relates to conversation history, session_log, and the previous turn's last_sql_context/last_topic_ids, (3) detects explain-only questions ('how did you get that answer?') and ambiguous/needs-clarification messages, and (4) resolves 'this post/topic' references to an exact unique_topic_id. Never answers the question — that's query_manager_node's job.",
+                reads: ["query", "messages", "session_log", "last_sql_context", "last_topic_ids"],
+                writes: ["corrected_query", "rewrite_context", "needs_clarification", "explain_request", "resolved_topic_reference", "answer (only if needs_clarification or explain_request)"],
+                trans: "Conditional (_query_rewriter_decision): if needs_clarification or explain_request is True, routes straight to END (short-circuit, skipping query_manager entirely). Otherwise continues to query_manager."
+            },
+            "query_manager": {
+                name: "query_manager",
+                line: "824",
+                func: "async def query_manager_node(state: State)",
+                desc: "The only node that writes state['query']. Consumes query_rewriter_node's corrected_query + rewrite_context (plus last_sql_context) and asks the LLM to write one self-contained standalone query. If rewrite_context is empty (nothing to relate to), it skips the LLM call entirely and passes corrected_query straight through.",
+                reads: ["query", "corrected_query", "rewrite_context", "last_sql_context", "resolved_topic_reference"],
+                writes: ["query"],
+                trans: "Always routes directly to router."
+            },
+            "router": {
+                name: "router",
+                line: "894",
+                func: "async def router_node(state: State)",
+                desc: "LLM classifier that analyzes the standalone query + conversation + PDF status to decide 'database' (police social-media data) vs 'pdf_chat' (uploaded document / general knowledge). Wrapped with two deterministic keyword backstops that can override the LLM's raw decision either way. Also resets retry_count and the content-index hint/retry-count for the new turn.",
+                reads: ["query", "messages", "pdf_uploaded", "pdf_filenames"],
+                writes: ["route", "retry_count (reset to 0)", "content_index_hint (reset)", "content_index_retry_count (reset to 0)"],
+                trans: "Conditional (_route_decision = state['route']): routes to 'table_selector' (database) or 'pdf_search' (pdf_chat)."
+            },
+            "pdf_search": {
+                name: "pdf_search",
+                line: "1038",
+                func: "async def pdf_search_node(state: State)",
+                desc: "Searches the uploaded PDF(s) for relevant chunks via search_pdf(). Currently a stub — returns no hits until the PDF ingestion/embedding pipeline is wired up.",
+                reads: ["query", "pdf_filenames"],
+                writes: ["pdf_results"],
+                trans: "Always routes directly to pdf_answer."
+            },
+            "pdf_answer": {
+                name: "pdf_answer",
+                line: "1047",
+                func: "async def pdf_answer_node(state: State)",
+                desc: "Writes the final reply from retrieved PDF passages, falling back to general knowledge if no excerpts were found. Adopts a custom expert persona from state['expert_name'] if set.",
+                reads: ["query", "messages", "pdf_results", "expert_name"],
+                writes: ["answer"],
+                trans: "Always routes to END."
+            },
+            "table_selector": {
+                name: "table_selector",
+                line: "1088",
+                func: "async def table_selector_node(state: State)",
+                desc: "DB Query Planner and loop entry point. Reads each table's use_case in DB_SCHEMA_YAML (plus any content_index_hint from a previous retry) and asks the LLM to pick only the tables this turn actually needs, with a reason. On a parse failure, falls back to a hardcoded ['topic', 'analyzed_data', 'post_bank'].",
+                reads: ["query", "content_index_hint"],
+                writes: ["selected_tables", "table_reason"],
+                trans: "Always routes directly to generate_sql."
+            },
+            "generate_sql": {
+                name: "generate_sql",
+                line: "2163",
+                func: "async def generate_sql_node(state: State)",
+                desc: "Wraps generate_sql() to build the MySQL SELECT statement. On a retry (retry_count > 0) passes the previous sql + sql_judge's feedback back in. Injects a hard unique_topic_id filter when resolved_topic_reference is set, then runs two deterministic safety-net passes: _inject_unassigned_exclusion (always excludes the catch-all 'unassigned post' bucket) and _inject_temporal_filter (adds a missing today/yesterday/last-N-hours/this-week filter for time-scoped queries).",
+                reads: ["query", "selected_tables", "resolved_topic_reference", "retry_count", "sql", "sql_match_reason"],
+                writes: ["sql"],
+                trans: "Always routes directly to sql_judge."
+            },
+            "sql_judge": {
+                name: "sql_judge",
+                line: "1137",
+                func: "async def sql_judge_node(state: State)",
+                desc: "SQL Auditor — a second LLM pass that checks whether the generated SQL actually answers the standalone query (wrong table, missing filters/JOINs, wrong aggregation, right SQL but wrong question). Increments retry_count on a mismatch; once retry_count reaches 2 it force-passes regardless of the verdict to avoid an infinite loop.",
+                reads: ["query", "sql", "retry_count"],
+                writes: ["sql_matches", "sql_match_reason", "retry_count"],
+                trans: "Conditional (_sql_judge_decision): if sql_matches is True, routes to is_safe_sql ('pass'). If False, loops back to table_selector ('retry', capped at 2)."
+            },
+            "is_safe_sql": {
+                name: "is_safe_sql",
+                line: "2205",
+                func: "async def is_safe_sql_node(state: State)",
+                desc: "Security checkpoint. Runs is_safe_sql() to scan the SQL string for injection vectors, write statements (INSERT/UPDATE/DELETE), and forbidden columns. On success it writes nothing at all (returns {}); on failure it clears sql/rows and pre-fills answer with the rejection message.",
+                reads: ["sql"],
+                writes: ["sql (cleared), rows (cleared), answer — only if unsafe; nothing on success"],
+                trans: "Always routes to execute_sql — there's no separate safe/unsafe branch. An unsafe query just arrives at execute_sql with sql already emptied, so it's a no-op that falls through to judge_and_reason."
+            },
+            "execute_sql": {
+                name: "execute_sql",
+                line: "2251",
+                func: "async def execute_sql_node(state: State)",
+                desc: "Runs the audited SELECT on MySQL, logs it to session_log/last_sql_context for follow-up grounding, and extracts last_topic_ids + post_metadata (source URLs) from the rows. Then calls the LLM (_classify_sql_query_intent) to label the query 'count' or 'summary' — this classification only happens here, after rows are back, not earlier in the pipeline.",
+                reads: ["sql", "query", "session_log"],
+                writes: ["rows", "query_intent", "last_sql_context", "last_topic_ids", "post_metadata"],
+                trans: "Conditional (_execute_decision): 'zero_rows' → content_index_search (rows empty, content_index_retry_count < 2), 'summary' → llm_validator (rows present, intent=summary), otherwise 'judge' → judge_and_reason (count intent, empty sql, or retries exhausted)."
+            },
+            "content_index_search": {
+                name: "content_index_search",
+                line: "2322",
+                func: "async def content_index_search_node(state: State)",
+                desc: "Fallback when execute_sql returns 0 rows. Searches the Qdrant content_index collection: Jina v3 vector search first, then a BM25/keyword scroll fallback if the vector hits are weak. Formats up to 5 matches into a content_index_hint (table/category/district/platform/text preview) for the next generate_sql attempt. Capped at 2 retries — beyond that it just returns a 'no matching data found' answer instead of searching again.",
+                reads: ["query", "content_index_retry_count"],
+                writes: ["content_index_hint", "content_index_retry_count"],
+                trans: "Always loops back to table_selector (single unconditional edge) — even once the retry cap is hit, so the graph still re-plans; it's content_index_search_node itself that stops searching past 2 attempts."
+            },
+            "llm_validator": {
+                name: "llm_validator",
+                line: "1194",
+                func: "async def llm_validator_node(state: State)",
+                desc: "Context filter used only on the 'summary' intent branch. Truncates rows to the first 100, then batch-processes them (batches of 10, up to 5 concurrent LLM calls) to extract only the content that actually answers the query into validated_sql_context.",
+                reads: ["rows", "query", "messages"],
+                writes: ["validated_sql_context"],
+                trans: "Always routes directly to judge_and_reason."
+            },
+            "judge_and_reason": {
+                name: "judge_and_reason",
+                line: "1418",
+                func: "async def judge_and_reason_node(state: State)",
+                desc: "Reasons over the returned rows (or a Qdrant near-match hint if rows are empty) against the standalone query — what they show, whether they answer it, any standout findings — and writes a short plain-text summary. Does NOT gate retries any more: there is no retrieval_ok flag and no loop back to table_selector from here.",
+                reads: ["query", "sql", "rows", "content_index_hint"],
+                writes: ["reasoning"],
+                trans: "Always routes directly to answer — unconditional single edge."
+            },
+            "answer": {
+                name: "answer",
+                line: "1464",
+                func: "async def answer_node(state: State)",
+                desc: "Final answer synthesizer — last stop before END. Uses validated_sql_context (summary intent) or reasoning + raw rows (count/other intent) to write the plain-language reply, including a Qdrant near-match caveat when rows are empty, and appends deduplicated source links from post_metadata.",
+                reads: ["query", "reasoning", "validated_sql_context", "rows", "sql", "query_intent", "post_metadata"],
+                writes: ["answer"],
+                trans: "Always routes to END."
+            },
+            "END": {
+                name: "END",
+                line: "Finish Point",
+                func: "langgraph.graph.END",
+                desc: "The termination point of the graph. At this stage, state['answer'] is finalized and returned back to the server and conversational front-end.",
+                reads: ["answer"],
+                writes: [],
+                trans: "Terminates execution."
+            }
+        };
+
+        // Paths Simulation Mockups
+        const simPaths = {
+            "normal-db": [
+                { node: "START", desc: "User query initializes the LangGraph state. Input: 'Show me posts from Lucknow district about traffic riots in June.'", state: { query: "Show me posts from Lucknow district about traffic riots in June.", retry_count: 0 } },
+                { node: "query_rewriter", desc: "Corrects spelling ('Lucknow', 'June'). First message, so rewrite_context is empty and needs_clarification/explain_request are both false.", state: { corrected_query: "Show me posts from Lucknow district about traffic riots in June.", rewrite_context: "", needs_clarification: false, explain_request: false } },
+                { node: "query_manager", desc: "rewrite_context is empty, so it skips the LLM call and passes corrected_query straight through as the standalone query.", state: { query: "Show me posts from Lucknow district about traffic riots in June." } },
+                { node: "router", desc: "Analyzes intent. Determines structured columns (Lucknow, traffic, June) exist in database tables. Routes to database; resets retry_count and content-index hint for this turn.", state: { route: "database", retry_count: 0, content_index_hint: "", content_index_retry_count: 0 } },
+                { node: "table_selector", desc: "Loop entry. Selects required DB tables: 'analyzed_data' (contains posts and districts).", state: { selected_tables: ["analyzed_data"], table_reason: "Lucknow district posts are stored in analyzed_data" } },
+                { node: "generate_sql", desc: "Builds SELECT query with district and date filters.", state: { sql: "SELECT * FROM analyzed_data WHERE district = 'LUCKNOW' AND month = 'June' LIMIT 50" } },
+                { node: "sql_judge", desc: "SQL auditor reviews syntax and validates that the filter matches Lucknow district and June criteria. Audit passes, so retry_count is left unchanged.", state: { sql_matches: true, sql_match_reason: "SQL matches Lucknow traffic posts in June.", retry_count: 0 } },
+                { node: "is_safe_sql", desc: "Verifies SQL contains no write operators (INSERT/DELETE) or unauthorized columns. Safe — writes nothing to state, just falls through to execute_sql.", state: {} },
+                { node: "execute_sql", desc: "Runs SELECT on MySQL. Retrieves 12 matching rows, then classifies intent — 'summary', since the user wants to read what the riot posts actually say.", state: { rows: [{ id: 101, text: "Traffic jam in Lucknow due to protest", district: "LUCKNOW" }, { id: 102, text: "Riot control deployed in Lucknow center", district: "LUCKNOW" }], query_intent: "summary" } },
+                { node: "llm_validator", desc: "LLM evaluates the 12 rows in parallel batches, keeping only the ones relevant to traffic riots, and writes the filtered text into validated_sql_context.", state: { validated_sql_context: "Lucknow Post 101: Traffic riot reported. Post 102: Riot police deployed." } },
+                { node: "judge_and_reason", desc: "Reasons over the validated context — Lucknow traffic riot posts from June, which answers the query. No gating any more: this always continues to answer.", state: { reasoning: "The rows show two Lucknow posts about traffic disruption from a protest/riot in June, directly answering the query." } },
+                { node: "answer", desc: "Formats final markdown answer compiling the Lucknow posts and summaries, then appends source links from post_metadata if any were found.", state: { answer: "Here are the Lucknow posts monitored in June regarding traffic riots:\n1. Post 101: Traffic riot reported...\n2. Post 102: Riot police deployed..." } },
+                { node: "END", desc: "Execution finished. Answer returned to user.", state: {} }
+            ],
+            "aggregation-db": [
+                { node: "START", desc: "Input query: 'How many posts were flagged yesterday in Noida?'", state: { query: "How many posts were flagged yesterday in Noida?", retry_count: 0 } },
+                { node: "query_rewriter", desc: "Spelling checks clean Noida. No clarification or explain flag needed.", state: { corrected_query: "How many posts were flagged yesterday in Noida?", rewrite_context: "", needs_clarification: false, explain_request: false } },
+                { node: "query_manager", desc: "No rewrite_context, so the corrected query passes straight through — no LLM call.", state: { query: "How many posts were flagged yesterday in Noida?" } },
+                { node: "router", desc: "Classifies as DB query. Noida posts count needs SQL.", state: { route: "database", retry_count: 0 } },
+                { node: "table_selector", desc: "Selects the 'analyzed_data' table.", state: { selected_tables: ["analyzed_data"], table_reason: "नोएडा posts count is in analyzed_data" } },
+                { node: "generate_sql", desc: "Generates an aggregate count query.", state: { sql: "SELECT COUNT(*) as total FROM analyzed_data WHERE district = 'GB NAGAR' AND date = '2026-07-26'" } },
+                { node: "sql_judge", desc: "Audits query. Matches the aggregate request.", state: { sql_matches: true, retry_count: 0 } },
+                { node: "is_safe_sql", desc: "Safety check passes — nothing written, falls through to execute_sql.", state: {} },
+                { node: "execute_sql", desc: "Runs SELECT COUNT(*). Retrieves 1 row: [{total: 45}]. _classify_sql_query_intent labels this 'count' (a plain aggregation, not a content-reading request), so it will bypass llm_validator entirely.", state: { rows: [{ total: 45 }], query_intent: "count" } },
+                { node: "judge_and_reason", desc: "'count' intent skipped llm_validator, so this node reasons directly over the 1-row aggregate result.", state: { reasoning: "The single row confirms 45 posts were flagged in Noida (GB Nagar) yesterday." } },
+                { node: "answer", desc: "Renders plain-text aggregate count report.", state: { answer: "A total of 45 posts were flagged in Noida (GB Nagar district) yesterday, 2026-07-26." } },
+                { node: "END", desc: "Graph terminated.", state: {} }
+            ],
+            "fallback-db": [
+                { node: "START", desc: "User query: 'Show reports from the connection type named Wimax'", state: { query: "Show reports from the connection type named Wimax", retry_count: 0 } },
+                { node: "query_rewriter", desc: "Pre-processes query. No clarification/explain flags.", state: { corrected_query: "Show reports from the connection type named Wimax", needs_clarification: false, explain_request: false } },
+                { node: "query_manager", desc: "Passes the corrected query straight through.", state: { query: "Show reports from the connection type named Wimax" } },
+                { node: "router", desc: "Routes to database.", state: { route: "database", retry_count: 0, content_index_retry_count: 0 } },
+                { node: "table_selector", desc: "Selects analyzed_data.", state: { selected_tables: ["analyzed_data"] } },
+                { node: "generate_sql", desc: "Builds SQL using the literal spelling from the query.", state: { sql: "SELECT * FROM analyzed_data WHERE connection_type = 'Wimax' LIMIT 50" } },
+                { node: "sql_judge", desc: "Audits query — looks fine syntactically, passes.", state: { sql_matches: true, retry_count: 0 } },
+                { node: "is_safe_sql", desc: "Checks safety — nothing written, falls through.", state: {} },
+                { node: "execute_sql", desc: "Executes SELECT. MySQL returns 0 rows because the stored value is 'WiMAX', not 'Wimax'. Zero rows and content_index_retry_count (0) is under the cap, so the graph routes to content_index_search.", state: { rows: [] } },
+                { node: "content_index_search", desc: "Vector + BM25/keyword fallback over the Qdrant content index hits 'connection_info' rows spelled 'WiMAX'. Builds a hint for the next generate_sql attempt.", state: { content_index_hint: "table=analyzed_data, category=connection_info, text=WiMAX broadband...", content_index_retry_count: 1 } },
+                { node: "table_selector", desc: "Unconditional loop-back from content_index_search. Re-selects analyzed_data, now with the content_index_hint available.", state: { selected_tables: ["analyzed_data"] } },
+                { node: "generate_sql", desc: "Rebuilds SQL using the index hint's corrected spelling.", state: { sql: "SELECT * FROM analyzed_data WHERE connection_type = 'WiMAX' LIMIT 50" } },
+                { node: "sql_judge", desc: "Re-audits the rebuilt query.", state: { sql_matches: true, retry_count: 0 } },
+                { node: "is_safe_sql", desc: "Re-verifies safety — nothing written, falls through.", state: {} },
+                { node: "execute_sql", desc: "Executes the rebuilt query. MySQL returns 15 rows this time; intent classifies as 'summary'.", state: { rows: [{ id: 201, connection_type: "WiMAX", text: "WiMAX broadband failure in Police HQs" }], query_intent: "summary" } },
+                { node: "llm_validator", desc: "Validates the 15 rows, extracting the relevant content.", state: { validated_sql_context: "Post 201: WiMAX broadband failure reported in police station." } },
+                { node: "judge_and_reason", desc: "Reasons over the validated context.", state: { reasoning: "15 WiMAX-related posts were found after correcting the spelling via the content index fallback." } },
+                { node: "answer", desc: "Formulates response detailing WiMAX connection reports.", state: { answer: "Here are the WiMAX connection reports:\n- Post 201 details a WiMAX broadband failure..." } },
+                { node: "END", desc: "Finished.", state: {} }
+            ],
+            "pdf-rag": [
+                { node: "START", desc: "User query: 'What is the SOP for social media rumors?'", state: { query: "What is the SOP for social media rumors?", retry_count: 0 } },
+                { node: "query_rewriter", desc: "Checks context. Not a clarification or explain request.", state: { corrected_query: "What is the SOP for social media rumors?", needs_clarification: false, explain_request: false } },
+                { node: "query_manager", desc: "Standalone query passes through unchanged.", state: { query: "What is the SOP for social media rumors?" } },
+                { node: "router", desc: "Detects active session PDF. Query is about SOP guidelines, not the police database. Routes to pdf_chat.", state: { route: "pdf_chat", pdf_uploaded: true, pdf_filenames: ["SOP_Social_Media_2026.pdf"] } },
+                { node: "pdf_search", desc: "Runs search_pdf() against the uploaded SOP PDF document. Retrieves 3 excerpts.", state: { pdf_results: [{ filename: "SOP_Social_Media_2026.pdf", page: 4, text: "Rumors must be flagged within 10 minutes and reported to district HQ." }] } },
+                { node: "pdf_answer", desc: "Uses excerpts (falling back to general knowledge if none matched) to formulate the guideline answer under the expert_name persona, if one is set.", state: { answer: "I am your Circular Expert. According to the SOP_Social_Media_2026.pdf (Page 4):\n- Rumors must be flagged within 10 minutes..." } },
+                { node: "END", desc: "Finished PDF flow.", state: {} }
+            ],
+            "explain-shortcut": [
+                { node: "START", desc: "User query: 'Why did you generate that previous count of Noida posts?'", state: { query: "Why did you generate that Noida post count?", retry_count: 0 } },
+                { node: "query_rewriter", desc: "Detects a 'why did you...' explain request about the previous turn. Runs a second LLM call to write the explanation directly, and sets explain_request so _query_rewriter_decision short-circuits.", state: { explain_request: true, answer: "I generated that Noida post count using a SQL SELECT query on analyzed_data filtering Noida (GB NAGAR) posts on 2026-07-26." } },
+                { node: "END", desc: "Short-circuits straight to END since the explanation answer is already composed — skips query_manager, router, and every DB/PDF node. (needs_clarification takes the identical shortcut for ambiguous messages like 'do it' or 'show me'.)", state: {} }
+            ]
+        };
+
+        // Active Simulation state variables
+        let currentPathId = "normal-db";
+        let currentStepIndex = -1;
+
+        // Active tab variable
+        let activeTab = "simulator";
+
+        // Tab Switching
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.getElementById("tab-btn-simulator").className = "flex-1 py-3 px-4 text-center border-b-2 " + (tabId === "simulator" ? "border-sky-500 text-sky-400" : "border-transparent text-slate-400 hover:text-slate-200") + " focus:outline-none transition";
+            document.getElementById("tab-btn-inspector").className = "flex-1 py-3 px-4 text-center border-b-2 " + (tabId === "inspector" ? "border-sky-500 text-sky-400" : "border-transparent text-slate-400 hover:text-slate-200") + " focus:outline-none transition";
+            document.getElementById("tab-btn-schema").className = "flex-1 py-3 px-4 text-center border-b-2 " + (tabId === "schema" ? "border-sky-500 text-sky-400" : "border-transparent text-slate-400 hover:text-slate-200") + " focus:outline-none transition";
+
+            document.getElementById("tab-content-simulator").classList.add("hidden");
+            document.getElementById("tab-content-inspector").classList.add("hidden");
+            document.getElementById("tab-content-schema").classList.add("hidden");
+            
+            document.getElementById("tab-content-" + tabId).classList.remove("hidden");
+        }
+
+        // Search State Schema
+        function filterSchema() {
+            const query = document.getElementById("schema-search").value.toLowerCase();
+            const list = document.getElementById("schema-list");
+            list.innerHTML = "";
+            
+            const filtered = stateSchema.filter(s => s.key.toLowerCase().includes(query) || s.desc.toLowerCase().includes(query));
+            
+            if (filtered.length === 0) {
+                list.innerHTML = `<div class="text-center py-4 text-slate-500 text-xs italic">No matching keys found</div>`;
+                return;
+            }
+
+            filtered.forEach(s => {
+                const item = document.createElement("div");
+                item.className = "p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1";
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-mono text-xs font-bold text-sky-400">${s.key}</span>
+                        <span class="font-mono text-[10px] text-slate-500 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">${s.type}</span>
+                    </div>
+                    <p class="text-xs text-slate-400 leading-relaxed">${s.desc}</p>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // Initialize State Schema list
+        function initSchema() {
+            filterSchema();
+        }
+
+        // Node Inspector Selection
+        function selectNode(nodeId) {
+            const data = nodesData[nodeId];
+            if (!data) return;
+
+            // Switch to Inspector tab
+            switchTab("inspector");
+            
+            document.getElementById("inspector-empty").classList.add("hidden");
+            document.getElementById("inspector-content").classList.remove("hidden");
+            
+            document.getElementById("inspect-name").textContent = data.name;
+            document.getElementById("inspect-line").textContent = data.line.includes("Point") ? data.line : "Line " + data.line;
+            document.getElementById("inspect-function").textContent = data.func;
+            document.getElementById("inspect-desc").textContent = data.desc;
+            document.getElementById("inspect-transitions").textContent = data.trans;
+            
+            // Render reads/writes keys
+            const readsContainer = document.getElementById("inspect-reads");
+            readsContainer.innerHTML = "";
+            if (data.reads.length === 0) {
+                readsContainer.innerHTML = '<span class="text-[10px] text-slate-500 italic">None</span>';
+            } else {
+                data.reads.forEach(k => {
+                    const badge = document.createElement("span");
+                    badge.className = "text-[10px] font-mono bg-sky-500/10 text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 cursor-pointer hover:bg-sky-500/20";
+                    badge.textContent = k;
+                    badge.onclick = () => {
+                        switchTab("schema");
+                        document.getElementById("schema-search").value = k;
+                        filterSchema();
+                    };
+                    readsContainer.appendChild(badge);
+                });
+            }
+
+            const writesContainer = document.getElementById("inspect-writes");
+            writesContainer.innerHTML = "";
+            if (data.writes.length === 0) {
+                writesContainer.innerHTML = '<span class="text-[10px] text-slate-500 italic">None</span>';
+            } else {
+                data.writes.forEach(k => {
+                    const badge = document.createElement("span");
+                    badge.className = "text-[10px] font-mono bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/20";
+                    badge.textContent = k;
+                    badge.onclick = () => {
+                        switchTab("schema");
+                        document.getElementById("schema-search").value = k;
+                        filterSchema();
+                    };
+                    writesContainer.appendChild(badge);
+                });
+            }
+            
+            // Highlight node in SVG
+            highlightNodeInSVG(nodeId);
+        }
+
+        function highlightNodeInSVG(nodeId) {
+            // Remove previous active classes
+            document.querySelectorAll(".node-rect").forEach(r => {
+                r.classList.remove("active");
+                r.style.removeAttribute && r.style.removeAttribute("filter");
+            });
+            document.querySelectorAll(".node-group").forEach(g => {
+                g.classList.remove("node-pulse");
+            });
+
+            // Add active class to selected node
+            const g = document.getElementById("node-" + nodeId);
+            if (g) {
+                const rect = g.querySelector(".node-rect");
+                if (rect) {
+                    rect.classList.add("active");
+                    const color = rect.style.stroke || "#38bdf8";
+                    rect.style.filter = `drop-shadow(0 0 12px ${color})`;
+                }
+                g.classList.add("node-pulse");
+            }
+        }
+
+        // Simulator Logic
+        function loadSimPath() {
+            currentPathId = document.getElementById("sim-path-select").value;
+            resetSim();
+        }
+
+        function resetSim() {
+            currentStepIndex = -1;
+            
+            // Reset edge/path highlights
+            document.querySelectorAll(".edge-path").forEach(p => {
+                p.classList.remove("active");
+                p.style.removeProperty && p.style.removeProperty("stroke");
+                p.style.removeProperty && p.style.removeProperty("stroke-width");
+                p.style.removeProperty && p.style.removeProperty("stroke-dasharray");
+            });
+
+            // Reset node highlights
+            document.querySelectorAll(".node-rect").forEach(r => {
+                r.classList.remove("active");
+                r.style.removeProperty && r.style.removeProperty("filter");
+            });
+            document.querySelectorAll(".node-group").forEach(g => {
+                g.classList.remove("node-pulse");
+            });
+
+            document.getElementById("sim-step-badge").textContent = `Step 0 / ${simPaths[currentPathId].length}`;
+            document.getElementById("sim-node-title").textContent = "Start Simulation";
+            document.getElementById("sim-node-desc").textContent = "Select a path above and click 'Next Step' to begin walking the LangGraph nodes. The active node, arrows, and state variables will highlight dynamically.";
+
+            // Reset State monitor table
+            const tbody = document.getElementById("state-table-body");
+            tbody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-slate-500 italic">Start simulation to populate state</td></tr>`;
+        }
+
+        function nextStep() {
+            const steps = simPaths[currentPathId];
+            if (currentStepIndex >= steps.length - 1) {
+                alert("Simulation finished! Click Reset to restart.");
+                return;
+            }
+
+            currentStepIndex++;
+            renderStep(steps[currentStepIndex]);
+        }
+
+        function prevStep() {
+            if (currentStepIndex <= 0) {
+                resetSim();
+                return;
+            }
+
+            currentStepIndex--;
+            renderStep(simPaths[currentPathId][currentStepIndex]);
+        }
+
+        function renderStep(step) {
+            const steps = simPaths[currentPathId];
+            const nodeId = step.node;
+            
+            document.getElementById("sim-step-badge").textContent = `Step ${currentStepIndex + 1} / ${steps.length}`;
+            document.getElementById("sim-node-title").textContent = nodeId;
+            document.getElementById("sim-node-desc").textContent = step.desc;
+
+            // Highlight node in graph
+            highlightNodeInSVG(nodeId);
+
+            // Highlight path between previous node and current node
+            if (currentStepIndex > 0) {
+                const prevNodeId = steps[currentStepIndex - 1].node;
+                highlightEdge(prevNodeId, nodeId);
+            }
+
+            // Update State Monitor Table
+            updateStateMonitor(step.state);
+        }
+
+        function highlightEdge(fromNode, toNode) {
+            // Find edge path in SVG
+            let pathElement = null;
+            let activeColor = "#38bdf8";
+
+            if (fromNode === "START" && toNode === "query_rewriter") pathElement = document.getElementById("edge-start-rewriter");
+            else if (fromNode === "query_rewriter" && toNode === "query_manager") pathElement = document.getElementById("edge-rewriter-manager");
+            else if (fromNode === "query_rewriter" && toNode === "END") {
+                pathElement = document.getElementById("edge-rewriter-explain");
+                activeColor = "#f43f5e";
+            }
+            else if (fromNode === "query_manager" && toNode === "router") pathElement = document.getElementById("edge-manager-router");
+            else if (fromNode === "router" && toNode === "pdf_search") {
+                pathElement = document.getElementById("edge-router-pdf");
+                activeColor = "#fb923c";
+            }
+            else if (fromNode === "router" && toNode === "table_selector") {
+                pathElement = document.getElementById("edge-router-db");
+                activeColor = "#34d399";
+            }
+            else if (fromNode === "pdf_search" && toNode === "pdf_answer") {
+                pathElement = document.getElementById("edge-pdf-search-answer");
+                activeColor = "#fb923c";
+            }
+            else if (fromNode === "pdf_answer" && toNode === "END") {
+                pathElement = document.getElementById("edge-pdf-answer-end");
+                activeColor = "#f43f5e";
+            }
+            else if (fromNode === "table_selector" && toNode === "generate_sql") {
+                pathElement = document.getElementById("edge-db-build");
+                activeColor = "#34d399";
+            }
+            else if (fromNode === "generate_sql" && toNode === "sql_judge") {
+                pathElement = document.getElementById("edge-build-judge");
+                activeColor = "#34d399";
+            }
+            else if (fromNode === "sql_judge" && toNode === "is_safe_sql") {
+                pathElement = document.getElementById("edge-judge-safe");
+                activeColor = "#34d399";
+            }
+            else if (fromNode === "sql_judge" && toNode === "table_selector") {
+                pathElement = document.getElementById("edge-judge-retry");
+                activeColor = "#fbbf24";
+            }
+            else if (fromNode === "is_safe_sql" && toNode === "execute_sql") {
+                pathElement = document.getElementById("edge-safe-execute");
+                activeColor = "#34d399";
+            }
+            else if (fromNode === "execute_sql" && toNode === "content_index_search") {
+                pathElement = document.getElementById("edge-execute-fallback");
+                activeColor = "#a78bfa";
+            }
+            else if (fromNode === "execute_sql" && toNode === "llm_validator") {
+                pathElement = document.getElementById("edge-execute-val");
+                activeColor = "#fbbf24";
+            }
+            else if (fromNode === "execute_sql" && toNode === "judge_and_reason") {
+                pathElement = document.getElementById("edge-execute-judge");
+                activeColor = "#fbbf24";
+            }
+            else if (fromNode === "content_index_search" && toNode === "table_selector") {
+                pathElement = document.getElementById("edge-fallback-rebuild");
+                activeColor = "#a78bfa";
+            }
+            else if (fromNode === "llm_validator" && toNode === "judge_and_reason") {
+                pathElement = document.getElementById("edge-llmval-judge");
+                activeColor = "#a78bfa";
+            }
+            else if (fromNode === "judge_and_reason" && toNode === "answer") {
+                pathElement = document.getElementById("edge-judge-answer");
+                activeColor = "#38bdf8";
+            }
+            else if (fromNode === "answer" && toNode === "END") {
+                pathElement = document.getElementById("edge-answer-end");
+                activeColor = "#f43f5e";
+            }
+
+            if (pathElement) {
+                pathElement.classList.add("active");
+                pathElement.style.setProperty("--active-color", activeColor);
+                pathElement.style.stroke = activeColor;
+                pathElement.style.strokeWidth = "3px";
+            }
+        }
+
+        // Keep local copy of current simulation state dictionary
+        let cumulativeState = {};
+
+        function updateStateMonitor(newStateChanges) {
+            const tbody = document.getElementById("state-table-body");
+            
+            if (currentStepIndex === 0) {
+                cumulativeState = {};
+            }
+            
+            // Merge changes
+            cumulativeState = { ...cumulativeState, ...newStateChanges };
+            
+            if (Object.keys(cumulativeState).length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-slate-500 italic">No variables set in State yet</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = "";
+            
+            Object.entries(cumulativeState).forEach(([key, val]) => {
+                const tr = document.createElement("tr");
+                tr.className = "border-b border-slate-800 hover:bg-slate-800/20 transition";
+                
+                // Highlight row if it was just changed in this specific step
+                if (newStateChanges && key in newStateChanges) {
+                    tr.className += " bg-emerald-500/10 text-emerald-300 font-bold";
+                }
+                
+                let valueStr = "";
+                if (typeof val === 'object') {
+                    valueStr = JSON.stringify(val);
+                    if (valueStr.length > 40) valueStr = valueStr.substring(0, 37) + "...";
+                } else {
+                    valueStr = String(val);
+                    if (valueStr.length > 40) valueStr = valueStr.substring(0, 37) + "...";
+                }
+
+                tr.innerHTML = `
+                    <td class="p-2 border-r border-slate-800 font-semibold text-slate-300">${key}</td>
+                    <td class="p-2 text-slate-400 text-[11px]" title="${JSON.stringify(val)}">${escapeHtml(valueStr)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        // SVG Zoom Fit
+        document.getElementById("zoom-fit-btn").onclick = function() {
+            const svg = document.getElementById("workflow-svg");
+            svg.setAttribute("viewBox", "0 0 1380 720");
+        };
+
+        // Initialize App
+        window.onload = function() {
+            initSchema();
+            loadSimPath();
+        };
+    </script>
+</body>
+</html>

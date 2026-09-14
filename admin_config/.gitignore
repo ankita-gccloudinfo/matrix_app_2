@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# VM Monitor subprocess & logs
+vm_monitor.log
+monitor_data/
+server_out.log
+server_err.log
+*.log
+logs/
+*.db
+*.db-wal
+*.db-journal
+*.sqlite3
+
+# Archives & OS
+*.zip
+*.tar.gz
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

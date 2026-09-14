@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Builder — Admin</title>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/query-log.css">
+  <link rel="stylesheet" href="/static/css/charts.css">
+  <style>
+    #content { max-width: 760px; margin: 0 auto; }
+
+    .rb-field { margin-bottom: 18px; }
+    .rb-field label.rb-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--ql-subtext);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-bottom: 8px;
+    }
+    .rb-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .rb-row > * { flex: 1; min-width: 160px; }
+
+    .rb-topic-results {
+      margin-top: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1.5px solid var(--ql-border);
+      border-radius: 8px;
+      background: var(--ql-bg);
+    }
+    .rb-topic-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--ql-border);
+    }
+    .rb-topic-row:last-child { border-bottom: none; }
+    .rb-topic-row:hover { background: var(--ql-accent-light); }
+    .rb-topic-row .rb-topic-meta { color: var(--ql-muted); font-size: 11px; white-space: nowrap; }
+    .rb-topic-empty { padding: 12px; font-size: 12.5px; color: var(--ql-muted); text-align: center; }
+
+    .rb-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .rb-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--ql-accent-light);
+      color: var(--ql-accent);
+      border: 1px solid var(--ql-accent);
+      border-radius: 999px;
+      padding: 5px 8px 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .rb-chip button {
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .rb-chip-count { font-size: 11.5px; color: var(--ql-muted); margin-top: 6px; }
+
+    .rb-result { margin-top: 20px; }
+    .rb-result.ok {
+      background: #ecfdf5; border: 1px solid #86efac; color: #166534;
+      border-radius: 8px; padding: 14px 16px; font-size: 13px;
+    }
+    .rb-result.err {
+      background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;
+      border-radius: 8px; padding: 14px 16px; font-size: 13px;
+    }
+    .rb-result a { color: var(--ql-accent); font-weight: 700; text-decoration: none; }
+    .rb-result a:hover { text-decoration: underline; }
+
+    #reportBuilderCard .report-picker-checklist { max-height: 320px; overflow-y: auto; }
+
+    .rb-tpl-list {
+      margin-top: 8px;
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1.5px solid var(--ql-border);
+      border-radius: 8px;
+      background: var(--ql-bg);
+    }
+    .rb-tpl-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--ql-border);
+    }
+    .rb-tpl-row:last-child { border-bottom: none; }
+    .rb-tpl-row:hover { background: var(--ql-accent-light); }
+    .rb-tpl-row.selected { background: var(--ql-accent-light); font-weight: 700; }
+    .rb-tpl-row .rb-tpl-meta { color: var(--ql-muted); font-size: 11px; white-space: nowrap; }
+    .rb-tpl-note {
+      font-size: 12px;
+      color: var(--ql-muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="topbar-titles">
+    <h1>📄 Report Builder</h1>
+    <p class="subtitle">Configure and generate an intelligence report PDF directly — no chat needed.</p>
+  </div>
+</div>
+
+<div id="content" class="admin-panel">
+  <div class="admin-card" id="reportBuilderCard">
+
+    <h2>1. Report Type</h2>
+    <div class="report-picker-type-row">
+      <label class="report-picker-type-option">
+        <input type="radio" name="rbReportType" value="topic" id="rbTypeTopic" checked>
+        Topic Report (specific topics, full breakdown)
+      </label>
+      <label class="report-picker-type-option">
+        <input type="radio" name="rbReportType" value="trending" id="rbTypeTrending">
+        Trending Report (aggregate, date range)
+      </label>
+      <label class="report-picker-type-option">
+        <input type="radio" name="rbReportType" value="template" id="rbTypeTemplate">
+        Custom Template (upload an HTML report, reskin it with real data)
+      </label>
+      <label class="report-picker-type-option">
+        <input type="radio" name="rbReportType" value="adhoc" id="rbTypeAdhoc">
+        AI-Generated Layout (Ad-hoc Prompt — preview & confirm)
+      </label>
+    </div>
+
+    <div id="rbAdhocSection" style="display:none;">
+      <h3>2. Layout & Design Prompt</h3>
+      <div class="rb-field">
+        <textarea class="admin-input" id="rbAdhocPrompt" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;"
+                  placeholder='Describe the desired layout, style, and focus (e.g. "Clean executive brief with indigo header, sentiment pie chart, top 3 sample posts, and key metrics tiles")'></textarea>
+        <div class="rb-tpl-note">The AI will generate an HTML layout matching your description with sample placeholder data for you to preview and refine.</div>
+      </div>
+
+      <h3>3. Topic / Scope</h3>
+      <div class="rb-field">
+        <div class="rb-row">
+          <input type="text" class="admin-input" id="rbAdhocTopicSearch" placeholder="Search topics by title...">
+        </div>
+        <div class="rb-topic-results" id="rbAdhocTopicResults">
+          <div class="rb-topic-empty">Start typing to search topics.</div>
+        </div>
+        <div class="rb-chips" id="rbAdhocSelectedTopic"></div>
+      </div>
+
+      <button type="button" class="report-picker-generate-btn admin-btn" id="rbAdhocPreviewBtn" style="margin-top:10px;">
+        Generate Layout Preview ▸
+      </button>
+
+      <div id="rbAdhocPreviewContainer" style="display:none; margin-top:24px;">
+        <h3>4. Layout Preview</h3>
+        <div class="adhoc-preview-container">
+          <div class="adhoc-preview-toolbar">
+            <span id="rbAdhocPreviewMeta"><strong>Preview</strong></span>
+            <button type="button" id="rbAdhocExpandBtn">⤢ Expand View</button>
+          </div>
+          <iframe id="rbAdhocPreviewIframe" class="adhoc-preview-iframe" sandbox="allow-same-origin allow-scripts"></iframe>
+        </div>
+
+        <div style="margin-top:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="report-picker-generate-btn admin-btn" id="rbAdhocConfirmBtn" style="background:#4f46e5;">
+            Looks good, Build with Real Data ▸
+          </button>
+        </div>
+
+        <!-- Post-preview Edit / Refinement Section -->
+        <div class="adhoc-edit-section" style="margin-top:18px;">
+          <div class="adhoc-edit-header">
+            ✏️ <span>Want to edit layout? Enter new requirements:</span>
+          </div>
+          <textarea class="adhoc-edit-textarea" id="rbAdhocEditTextarea"
+                    placeholder="e.g. Change color scheme to dark mode, add platform distribution stats, remove sample quotes..."></textarea>
+          <div class="adhoc-edit-actions">
+            <button type="button" class="adhoc-edit-btn" id="rbAdhocRegenerateBtn">
+              🔄 Regenerate Preview with Changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="rbAdhocResult" style="margin-top:16px;"></div>
+    </div>
+
+    <div id="rbTemplateSection" style="display:none;">
+      <h3>2. Template</h3>
+      <div class="rb-field">
+        <div class="rb-row">
+          <input type="file" class="admin-input" id="rbTemplateFile" accept=".html">
+          <button type="button" class="admin-btn" id="rbTemplateUploadBtn" style="flex:0 0 auto;width:auto;padding:10px 18px;">Upload</button>
+        </div>
+        <div class="rb-tpl-note">Upload a complete, self-contained .html report (inline CSS/JS is fine) — up to 150KB. It'll be reskinned with real data for the topic you pick below.</div>
+        <div class="rb-tpl-list" id="rbTemplateList"><div class="rb-topic-empty">No templates uploaded yet.</div></div>
+      </div>
+
+      <h3>3. Topic</h3>
+      <div class="rb-field">
+        <div class="rb-row">
+          <input type="text" class="admin-input" id="rbTplTopicSearch" placeholder="Search topics by title...">
+        </div>
+        <div class="rb-topic-results" id="rbTplTopicResults">
+          <div class="rb-topic-empty">Start typing to search topics.</div>
+        </div>
+        <div class="rb-chips" id="rbTplSelectedTopic"></div>
+      </div>
+
+      <h3>4. Custom Instructions (optional)</h3>
+      <input type="text" class="admin-input report-picker-custom-input" id="rbTplCustomInstructions"
+             placeholder='e.g. "keep the dark theme exactly as-is"'>
+
+      <button type="button" class="report-picker-generate-btn admin-btn" id="rbTplGenerateBtn" style="margin-top:20px;">
+        Generate report ▸
+      </button>
+
+      <div id="rbTplResult"></div>
+    </div>
+
+    <div id="rbBuiltInSection">
+      <div id="rbTopicSection">
+        <h3>2. Topics</h3>
+        <div class="rb-field">
+          <div class="rb-row">
+            <input type="text" class="admin-input" id="rbTopicSearch" placeholder="Search topics by title...">
+            <select class="admin-select" id="rbDistrictFilter"><option value="All">All districts</option></select>
+          </div>
+          <div class="rb-topic-results" id="rbTopicResults">
+            <div class="rb-topic-empty">Start typing to search topics.</div>
+          </div>
+          <div class="rb-chips" id="rbSelectedTopics"></div>
+          <div class="rb-chip-count" id="rbTopicCount"></div>
+        </div>
+      </div>
+
+      <div id="rbTrendingSection" style="display:none;">
+        <h3>2. Date Range</h3>
+        <div class="rb-field">
+          <div class="rb-row">
+            <input type="date" class="admin-input" id="rbDateFrom">
+            <input type="date" class="admin-input" id="rbDateTo">
+          </div>
+        </div>
+      </div>
+
+      <h3>3. Components</h3>
+      <div id="rbChecklistContainer"></div>
+
+      <h3>4. Custom Instructions (optional)</h3>
+      <input type="text" class="admin-input report-picker-custom-input" id="rbCustomInstructions"
+             placeholder='e.g. "highlight CCTV posts"'>
+
+      <button type="button" class="report-picker-generate-btn admin-btn" id="rbGenerateBtn" style="margin-top:20px;">
+        Generate report ▸
+      </button>
+
+      <div id="rbResult"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/report-builder.js"></script>
+</body>
+</html>

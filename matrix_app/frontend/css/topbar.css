@@ -1,0 +1,225 @@
+/* Top Bar */
+.top-bar {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 10;
+}
+
+/* Location Badge */
+.location-badge {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px 8px 14px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.08));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Outfit', sans-serif;
+}
+
+.location-badge:hover {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(99, 102, 241, 0.14));
+    border-color: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 2px 12px rgba(59, 130, 246, 0.12);
+}
+
+.location-badge.detected {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.08));
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.location-badge.detected:hover {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(59, 130, 246, 0.14));
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.15);
+}
+
+.location-badge-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.12), transparent);
+    animation: badgeScan 1.8s ease-in-out infinite;
+}
+
+@keyframes badgeScan {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.location-badge-icon {
+    width: 16px;
+    height: 16px;
+    color: #3b82f6;
+    flex-shrink: 0;
+    z-index: 1;
+    animation: pinBounce 1.5s ease-in-out infinite;
+}
+
+.location-badge.detected .location-badge-icon {
+    color: #10b981;
+    animation: none;
+}
+
+@keyframes pinBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+.location-badge-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    z-index: 1;
+    white-space: nowrap;
+    transition: color 0.3s;
+}
+
+.location-badge.detected .location-badge-text {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+#hardRefreshBtn.spinning i {
+    animation: hardRefreshSpin 0.8s linear infinite;
+}
+
+@keyframes hardRefreshSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Hamburger trigger — hidden on desktop (mobile.css shows it); on desktop
+   reportBtn/hardRefreshBtn stay inline via .topbar-actions below instead. */
+.hamburger-btn {
+    display: none;
+}
+
+/* Wraps reportBtn/hardRefreshBtn so they can be repositioned into a
+   popover on mobile (see mobile.css) without changing their ids — the
+   click handlers in index.html's inline script target getElementById
+   directly and don't care where in the DOM this wrapper places them. */
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.topbar-action-label {
+    display: none;
+}
+
+/* Toggles .topbar-actions open on mobile — hidden on desktop, where
+   .topbar-actions is always visible inline instead. */
+.topbar-dropdown-btn {
+    display: none;
+}
+
+/* ── Hamburger Drawer ─────────────────────────────────────────────
+   Left slide-out panel opened by .hamburger-btn (mobile only). Mirrors
+   the .trace-panel / .related-panel fixed-overlay pattern used elsewhere. */
+.hamburger-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 9000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.hamburger-drawer-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.hamburger-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    background: var(--bg-primary, #fff);
+    border-right: 1px solid var(--border-color);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    /* calc(-100% - 20px), not a bare -100% — guards against the same
+       subpixel-rounding sliver the right-side panels had (see trace.css). */
+    transform: translateX(calc(-100% - 20px));
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hamburger-drawer-overlay.active .hamburger-drawer {
+    transform: translateX(0);
+}
+
+.hamburger-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.hamburger-drawer-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hamburger-drawer-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border: none;
+    background: none;
+    width: 100%;
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.hamburger-drawer-item:hover {
+    background: var(--hover-bg);
+}
+
+.hamburger-drawer-item i {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+.hamburger-drawer-section-label {
+    padding: 14px 18px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+/* #hamburgerHistoryList reuses .history-list (history.css: flex:1;
+   overflow-y:auto) so it fills the remaining drawer height and scrolls
+   independently, same as the desktop history panel's own list. */
+
+/* Hide extra topbar buttons on desktop (as they are already in the sidebar) */
+#topbarNetworkBtn, #topbarSettingsBtn {
+    display: none;
+}

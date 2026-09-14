@@ -1,0 +1,23 @@
+{
+  "template_id": "tpl_sentiment_analytics",
+  "display_name": "Sentiment & Media Analytics",
+  "source_file": "template_4_sentiment_media_analytics.html",
+  "tags": [
+    "sentiment",
+    "media",
+    "analytics",
+    "social",
+    "viral",
+    "charts",
+    "twitter",
+    "facebook",
+    "trends",
+    "engagement",
+    "detailed",
+    "posts",
+    "post",
+    "platform"
+  ],
+  "description": "Rich social media and sentiment analytics dashboard featuring time-series charts, platform share, top posts, and sentiment analysis.",
+  "curated": true
+}

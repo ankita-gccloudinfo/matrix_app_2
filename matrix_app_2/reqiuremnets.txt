@@ -1,0 +1,45 @@
+speedtest-cli
+pymupdf
+httpx
+qdrant-client
+
+# torch==2.2.2 is the newest build available for this Intel Mac (no wheel
+# for newer torch here) — transformers 4.49.0 is pinned to stay compatible
+# with this torch/sentence-transformers stack. Bumping any of these without
+# checking the others can break the server at startup.
+torch==2.2.2
+torchaudio==2.2.2
+
+fastapi
+pydantic
+sentence-transformers==3.4.1
+transformers==4.49.0
+
+langchain-ollama
+langchain-openai
+mysql-connector-python
+python-dotenv
+langgraph
+pymongo
+sqlglot
+motor
+faster-whisper
+beautifulsoup4
+uvicorn
+psutil
+nvidia-ml-py3
+tqdm
+neo4j
+einops
+python-multipart
+piper-tts
+websockets
+
+# nemo_toolkit[asr]  # Install on A10 GPU instance for native Nemotron 3.5 ASR support
+
+playwright      # Report-builder PDF rendering — headless Chromium print-to-PDF, needed for correct
+                # Devanagari/complex-script text shaping (reportlab-based libs like xhtml2pdf can't
+                # shape Devanagari at all — see services/dynamic_report_service.py). Requires a one-time
+                # `playwright install chromium` after pip install (~200MB browser download, not a pip dep).
+
+pypdf

@@ -1,0 +1,126 @@
+{
+  "head_html": "<head>\n<meta charset=\"utf-8\"/>\n<title>Executive Intelligence Brief — UP Police</title>\n<link href=\"https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n  :root {\n    --bg: #0B0F19;\n    --card: #151D2E;\n    --card-hover: #1E293B;\n    --border: #26354D;\n    --text: #F1F5F9;\n    --muted: #94A3B8;\n    --accent: #38BDF8;\n    --accent-glow: rgba(56, 189, 248, 0.15);\n    --red: #F43F5E;\n    --amber: #F59E0B;\n    --green: #10B981;\n    --purple: #A855F7;\n  }\n  * { box-sizing: border-box; }\n  body {\n    margin: 0;\n    font-family: 'Plus Jakarta Sans', sans-serif;\n    background: var(--bg);\n    color: var(--text);\n    font-size: 13.5px;\n    line-height: 1.5;\n  }\n  .page {\n    max-width: 900px;\n    margin: 0 auto;\n    padding: 28px;\n    page-break-after: always;\n  }\n  .header {\n    background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 22px 26px;\n    margin-bottom: 20px;\n    position: relative;\n    overflow: hidden;\n  }\n  .header::before {\n    content: '';\n    position: absolute;\n    top: 0; left: 0; right: 0; height: 3px;\n    background: linear-gradient(90deg, var(--accent), var(--purple));\n  }\n  .top-meta {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 10px;\n  }\n  .badge {\n    font-family: 'IBM Plex Mono', monospace;\n    font-size: 11px;\n    font-weight: 600;\n    letter-spacing: .08em;\n    text-transform: uppercase;\n    background: var(--accent-glow);\n    color: var(--accent);\n    border: 1px solid rgba(56, 189, 248, 0.3);\n    padding: 3px 10px;\n    border-radius: 6px;\n  }\n  .sec-tag {\n    font-family: 'IBM Plex Mono', monospace;\n    font-size: 11px;\n    color: var(--red);\n    font-weight: 600;\n    letter-spacing: .08em;\n  }\n  .header h1 {\n    margin: 0 0 6px 0;\n    font-size: 21px;\n    font-weight: 800;\n    color: #FFF;\n    letter-spacing: -0.01em;\n  }\n  .header .sub {\n    font-size: 12.5px;\n    color: var(--muted);\n  }\n\n  .kpi-grid {\n    display: grid;\n    grid-template-columns: repeat(4, 1fr);\n    gap: 14px;\n    margin-bottom: 20px;\n  }\n  .kpi-card {\n    background: var(--card);\n    border: 1px solid var(--border);\n    border-radius: 10px;\n    padding: 14px 16px;\n    break-inside: avoid !important;\n  }\n  .kpi-card .val {\n    font-size: 22px;\n    font-weight: 800;\n    color: #FFF;\n  }\n  .kpi-card .lbl {\n    font-size: 11.5px;\n    color: var(--muted);\n    margin-top: 2px;\n    text-transform: uppercase;\n    letter-spacing: .04em;\n    font-weight: 600;\n  }\n\n  .grid-2col {\n    display: grid;\n    grid-template-columns: 1.1fr 0.9fr;\n    gap: 16px;\n    margin-bottom: 20px;\n  }\n  .card {\n    background: var(--card);\n    border: 1px solid var(--border);\n    border-radius: 10px;\n    padding: 18px 20px;\n    break-inside: avoid !important;\n  }\n  .card-title {\n    font-size: 12px;\n    font-weight: 700;\n    text-transform: uppercase;\n    letter-spacing: .06em;\n    color: var(--accent);\n    margin: 0 0 14px 0;\n    display: flex;\n    align-items: center;\n    gap: 8px;\n  }\n\n  .bar-row {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    margin-bottom: 9px;\n  }\n  .bar-label {\n    width: 90px;\n    font-size: 12px;\n    color: var(--muted);\n    flex-shrink: 0;\n  }\n  .bar-track {\n    flex: 1;\n    background: #0F172A;\n    border-radius: 4px;\n    height: 10px;\n    overflow: hidden;\n  }\n  .bar-fill {\n    height: 100%;\n    border-radius: 4px;\n  }\n  .bar-count {\n    width: 50px;\n    text-align: right;\n    font-size: 12px;\n    font-weight: 700;\n    color: #FFF;\n    flex-shrink: 0;\n  }\n\n  .tag-cloud {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n  .tag-chip {\n    background: #0F172A;\n    border: 1px solid var(--border);\n    color: var(--text);\n    padding: 3px 10px;\n    border-radius: 6px;\n    font-size: 11.5px;\n    font-weight: 500;\n  }\n\n  table {\n    width: 100%;\n    border-collapse: collapse;\n    font-size: 12px;\n  }\n  th {\n    text-align: left;\n    color: var(--muted);\n    font-size: 10.5px;\n    text-transform: uppercase;\n    letter-spacing: .05em;\n    padding: 7px 10px;\n    border-bottom: 1px solid var(--border);\n    font-family: 'IBM Plex Mono', monospace;\n  }\n  td {\n    padding: 8px 10px;\n    border-bottom: 1px solid #1A2438;\n    color: var(--text);\n  }\n\n  .footer {\n    text-align: center;\n    font-size: 11px;\n    color: var(--muted);\n    font-family: 'IBM Plex Mono', monospace;\n    margin-top: 24px;\n  }\n</style>\n</head>",
+  "tagged_body_html": "<body>\n<div class=\"page\">\n<div class=\"header\">\n<div class=\"top-meta\">\n<span class=\"badge\">Executive Threat Brief</span>\n<span class=\"sec-tag\">● LAW &amp; ORDER MONITORING</span>\n</div>\n<h1>SAMPLE_TOPIC_TITLE</h1>\n<div class=\"sub\">District Focus: Statewide Tracking · Social Intelligence Command</div>\n</div>\n<div class=\"kpi-grid\">\n<div class=\"kpi-card\">\n<div class=\"val\" data-slot=\"s1\">1,284</div>\n<div class=\"lbl\">Total Posts</div>\n</div>\n<div class=\"kpi-card\">\n<div class=\"val\" data-slot=\"s2\">9,410</div>\n<div class=\"lbl\">Likes</div>\n</div>\n<div class=\"kpi-card\">\n<div class=\"val\" data-slot=\"s3\">1,022</div>\n<div class=\"lbl\">Comments</div>\n</div>\n<div class=\"kpi-card\">\n<div class=\"val\" data-slot=\"s4\">3,650</div>\n<div class=\"lbl\">Shares</div>\n</div>\n</div>\n<div class=\"grid-2col\">\n<div class=\"card\">\n<div class=\"card-title\">Public Sentiment Spectrum</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Negative</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:60%;background:var(--red);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s5\">702</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Neutral</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:25%;background:var(--amber);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s6\">411</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Positive</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:15%;background:var(--green);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s7\">171</div>\n</div>\n</div>\n<div class=\"card\">\n<div class=\"card-title\">Ingested Platforms</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Twitter/X</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:50%;background:var(--accent);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s8\">616</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Facebook</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:30%;background:var(--accent);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s9\">347</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">YouTube</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:15%;background:var(--accent);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s10\">116</div>\n</div>\n</div>\n</div>\n<div class=\"card\" style=\"margin-bottom:20px;\">\n<div class=\"card-title\">Critical Keyword Markers</div>\n<div class=\"tag-cloud\" data-slot=\"s11\">\n<span class=\"tag-chip\">sample_keyword_1</span>\n<span class=\"tag-chip\">sample_keyword_2</span>\n<span class=\"tag-chip\">sample_keyword_3</span>\n<span class=\"tag-chip\">#SampleTagOne</span>\n<span class=\"tag-chip\">#SampleTagTwo</span>\n</div>\n</div>\n<div class=\"card\">\n<div class=\"card-title\">Monitored Institutional Handles Tagged</div>\n<table data-slot=\"s12\">\n<thead>\n<tr>\n<th>Account Handle</th>\n<th>Designation</th>\n<th>Platform</th>\n<th>Mentions</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>@sample_handle_1</td>\n<td>District Police</td>\n<td>Twitter/X</td>\n<td>24</td>\n</tr>\n<tr>\n<td>@sample_handle_2</td>\n<td>Headquarters</td>\n<td>Twitter/X</td>\n<td>12</td>\n</tr>\n</tbody>\n</table>\n</div>\n<div class=\"footer\">UP POLICE CYBER COMMAND · AUTOMATED MATRIX INTELLIGENCE DOSSIER</div>\n</div>\n</body>",
+  "slots": [
+    {
+      "slot_id": "s1",
+      "slot_type": "stat_number",
+      "sample_text": "1,284",
+      "context_label": "Total Posts",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "total_posts",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s2",
+      "slot_type": "stat_number",
+      "sample_text": "9,410",
+      "context_label": "Likes",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_likes",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s3",
+      "slot_type": "stat_number",
+      "sample_text": "1,022",
+      "context_label": "Comments",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_comments",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s4",
+      "slot_type": "stat_number",
+      "sample_text": "3,650",
+      "context_label": "Shares",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_shares",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s5",
+      "slot_type": "stat_number",
+      "sample_text": "702",
+      "context_label": "Negative",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.negative",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s6",
+      "slot_type": "stat_number",
+      "sample_text": "411",
+      "context_label": "Neutral",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.neutral",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s7",
+      "slot_type": "stat_number",
+      "sample_text": "171",
+      "context_label": "Positive",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.positive",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s8",
+      "slot_type": "stat_number",
+      "sample_text": "616",
+      "context_label": "Twitter/X",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.TWITTER",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s9",
+      "slot_type": "stat_number",
+      "sample_text": "347",
+      "context_label": "Facebook",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.facebook",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s10",
+      "slot_type": "stat_number",
+      "sample_text": "116",
+      "context_label": "YouTube",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.YouTube",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s11",
+      "slot_type": "chip_list",
+      "sample_text": "sample_keyword_1sample_keyword_2sample_keyword_3#SampleTagOne#SampleTagTwo",
+      "context_label": "",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "keywords",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s12",
+      "slot_type": "table_rows",
+      "sample_text": "Account HandleDesignationPlatformMentions@sample_handle_1District PoliceTwitter/X24@sample_handle_2HeadquartersTwitter/X",
+      "context_label": "",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": null,
+      "status": "clean"
+    }
+  ]
+}

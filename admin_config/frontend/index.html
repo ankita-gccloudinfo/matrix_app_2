@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Config Admin</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div id="authScreen" class="auth-screen" style="display:none;">
+    <form id="authForm" class="auth-card">
+        <div class="auth-logo">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+        </div>
+        <h1 id="authTitle">Admin Login</h1>
+        <p id="authSubtitle" class="muted">Sign in to manage project configuration.</p>
+        <label>Username
+            <input type="text" id="authUsername" autocomplete="username" required autofocus>
+        </label>
+        <label>Password
+            <input type="password" id="authPassword" autocomplete="current-password" required>
+        </label>
+        <div id="authError" class="error-text" style="display:none;"></div>
+        <button type="submit" id="authSubmitBtn">
+            <span id="authSubmitLabel">Sign in</span>
+        </button>
+    </form>
+</div>
+
+<div id="appScreen" class="app-shell" style="display:none;">
+    <header class="topbar">
+        <div class="topbar-brand">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+            <h1>Project Config Admin</h1>
+        </div>
+        <div class="topbar-right">
+            <span class="whoami-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                <span id="whoami"></span>
+            </span>
+            <button id="logoutBtn" class="btn-secondary btn-sm">Log out</button>
+        </div>
+    </header>
+
+    <div class="layout">
+        <nav id="projectNav" class="project-nav">
+            <div id="navStaticHeader">
+                <div class="nav-label">System</div>
+                <button type="button" id="vmMonitorNavBtn" class="nav-special-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <span>Matrix VM Monitor</span>
+                </button>
+                <div class="nav-label">Projects</div>
+            </div>
+            <div id="navProjectList"></div>
+        </nav>
+
+        <main id="projectConfigView" class="config-panel">
+            <div class="config-header">
+                <div>
+                    <h2 id="configTitle">—</h2>
+                    <span id="configPort" class="port-badge"></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button id="openProjectBtn" class="btn-secondary btn-sm" style="display:none;" title="Open this project's running app in a new tab">Open Project ↗</button>
+                    <button id="viewReferenceBtn" class="btn-secondary btn-sm" title="Show recommended configurations">Hints / Reference</button>
+                    <button id="viewLogsBtn" class="btn-secondary btn-sm" style="display:none;">View Logs</button>
+                    <button id="restartProjectBtn" class="btn-secondary btn-sm" style="display:none; color: #ff9800; border-color: rgba(255, 152, 0, 0.4);">Restart Project</button>
+                    <button id="deleteProjectBtn" class="btn-secondary btn-sm" style="display:none; color: #e53935; border-color: rgba(229, 57, 53, 0.4);">Delete Project</button>
+                    <span id="configUpdatedAt" class="muted"></span>
+                </div>
+            </div>
+
+            <div class="config-table-wrap">
+                <table class="config-table">
+                    <thead>
+                        <tr><th>Key</th><th>Value</th><th class="col-actions"></th></tr>
+                    </thead>
+                    <tbody id="configRows"></tbody>
+                </table>
+            </div>
+
+            <div class="add-row">
+                <input type="text" id="newKeyInput" list="suggestedKeys" placeholder="KEY_NAME (e.g. PDF_QDRANT_HOST)">
+                <input type="text" id="newValueInput" placeholder="value">
+                <button id="addKeyBtn" class="btn-secondary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Add
+                </button>
+            </div>
+            <datalist id="suggestedKeys"></datalist>
+
+            <div class="save-row">
+                <button id="saveConfigBtn">Save changes</button>
+                <span id="saveStatus" class="save-status"></span>
+            </div>
+
+            <p class="hint">
+                Changes take effect the next time that project's <code>server.py</code> is restarted
+                — each app reads its config once at startup via
+                <code>common/project_config.py</code>, it isn't polled live.
+            </p>
+        </main>
+
+        <div id="vmMonitorView" class="config-panel vm-monitor-panel" style="display:none;">
+            <div class="config-header">
+                <div>
+                    <h2>Matrix VM Monitor</h2>
+                    <span id="vmMonitorStatusPill" class="status-pill pending">Checking…</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button id="vmMonitorRefreshBtn" class="btn-secondary btn-sm" type="button">Refresh</button>
+                    <button id="vmMonitorOpenBtn" class="btn-secondary btn-sm" type="button">Open in new tab ↗</button>
+                </div>
+            </div>
+
+            <div id="vmMonitorOffline" class="vm-monitor-offline" style="display:none;">
+                <p><strong>Matrix VM Monitor is not reachable.</strong></p>
+                <p class="muted">It runs as a subprocess of <code>matrix_app/server.py</code> on port 8790 — make sure the Matrix App project is running, then click Refresh.</p>
+                <p id="vmMonitorErrorDetail" class="muted"></p>
+            </div>
+
+            <iframe id="vmMonitorFrame" class="vm-monitor-frame" style="display:none;" title="Matrix VM Monitor"></iframe>
+        </div>
+    </div>
+</div>
+
+<div id="newProjectChooserOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:20;">
+    <div class="auth-card" style="width:440px;">
+        <h1>New Project</h1>
+        <p class="muted">What do you want to create?</p>
+        <div class="chooser-cards">
+            <button type="button" id="chooseDemoBtn" class="chooser-card">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2z"/><path d="m10 21 2-4 2 4"/><path d="M8 21h8"/></svg>
+                <span class="chooser-card-title">Demo</span>
+                <span class="chooser-card-desc">Describe a theme and features, preview a mocked-up chat UI, decide later.</span>
+            </button>
+            <button type="button" id="chooseChatbotBtn" class="chooser-card">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+                <span class="chooser-card-title">Chatbot</span>
+                <span class="chooser-card-desc">Scaffold a real project folder now, like ai_sayak or jk. You write the logic by hand.</span>
+            </button>
+        </div>
+        <div style="display:flex; margin-top:4px;">
+            <button type="button" id="cancelChooserBtn" class="btn-secondary" style="flex:1; justify-content:center;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="createProjectOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:20;">
+    <form id="createProjectForm" class="auth-card" style="width:380px;">
+        <h1>New Chatbot Project</h1>
+        <p class="muted">
+            Scaffolds a real sibling folder using river_cannel's blank-skeleton shape —
+            a working shell with no domain logic yet. You write the actual behavior
+            afterward in its <code>ollamaagent2.py</code>.
+        </p>
+        <label>Project name
+            <input type="text" id="newProjectName" placeholder="e.g. my_new_app" pattern="[a-z][a-z0-9_]*" required>
+        </label>
+        <span class="muted" style="margin-top:-8px;">Lowercase letters, digits, underscores only — becomes the folder name.</span>
+        <label>Display label <span class="muted" style="font-weight:400;">(optional)</span>
+            <input type="text" id="newProjectLabel" placeholder="e.g. My New App">
+        </label>
+        <div id="createProjectError" class="error-text" style="display:none;"></div>
+        <div style="display:flex; gap:8px; margin-top:4px;">
+            <button type="button" id="cancelCreateProjectBtn" class="btn-secondary" style="flex:1; justify-content:center;">Back</button>
+            <button type="submit" id="createProjectSubmitBtn" style="flex:1; justify-content:center;">Create</button>
+        </div>
+    </form>
+</div>
+
+<div id="demoBuilderOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:20;">
+    <div class="auth-card demo-builder-card">
+        <h1>New Demo</h1>
+        <p class="muted">Describe it in plain language — nothing is created on disk until you promote it.</p>
+        <div class="demo-builder-body">
+            <form id="demoBuilderForm" class="demo-builder-form">
+                <div id="demoPdfUploadBox" class="demo-pdf-box">
+                    <div class="demo-pdf-box-title">✨ Auto-fill from a PDF (optional)</div>
+                    <p class="demo-pdf-box-desc">Upload a document — the AI reads it and proposes the page count, features, and questions below for you to review.</p>
+                    <div class="demo-pdf-row">
+                        <input type="file" id="demoPdfInput" accept="application/pdf">
+                        <button type="button" id="analyzePdfBtn" class="btn-secondary btn-sm">Analyze PDF</button>
+                    </div>
+                    <div id="demoPdfStatus" class="demo-pdf-status"></div>
+                </div>
+                <label>Demo name
+                    <input type="text" id="demoName" placeholder="e.g. jk" pattern="[a-z][a-z0-9_]*" required>
+                </label>
+                <span class="muted" style="margin-top:-8px;">Lowercase letters, digits, underscores only — used as the folder name if promoted.</span>
+                <label>Theme
+                    <input type="text" id="demoTheme" placeholder="e.g. medical, government, transport">
+                </label>
+                <label>Number of pages
+                    <select id="demoPageCount" class="demo-select">
+                        <option value="1">1 page</option>
+                        <option value="2" selected>2 pages</option>
+                        <option value="3">3 pages</option>
+                    </select>
+                </label>
+                <div id="demoPagesContainer" class="demo-pages-container"></div>
+                <div id="demoBuilderError" class="error-text" style="display:none;"></div>
+                <button type="submit" id="generateDemoBtn" style="justify-content:center;">Generate preview</button>
+            </form>
+            <div class="demo-builder-preview">
+                <div id="demoPreviewEmpty" class="demo-preview-empty">Preview will show up here.</div>
+                <div id="demoPreviewTabs" class="demo-preview-tabs"></div>
+                <iframe id="demoPreviewFrame" style="display:none;" sandbox="allow-scripts allow-same-origin"></iframe>
+            </div>
+        </div>
+        <div id="demoPromoteRow" style="display:none; gap:8px; margin-top:4px;">
+            <button type="button" id="backFromDemoBtn" class="btn-secondary" style="flex:1; justify-content:center;">Back</button>
+            <button type="button" id="regenerateDemoBtn" class="btn-secondary" style="flex:1; justify-content:center;">Regenerate</button>
+            <button type="button" id="promoteDemoBtn" style="flex:1; justify-content:center;">Create real project</button>
+        </div>
+        <div id="demoBackRow" style="display:flex; gap:8px; margin-top:4px;">
+            <button type="button" id="cancelDemoBtn" class="btn-secondary" style="flex:1; justify-content:center;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="deleteProjectOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:25;">
+    <div class="auth-card" style="width:360px;">
+        <h1 style="color:#e53935;">Delete Project</h1>
+        <p id="deleteProjectMsg" style="margin:0 0 16px; color:#555; font-size:14px;"></p>
+        <label style="display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600;">
+            Admin Password
+            <input id="deleteProjectPassword" type="password" placeholder="Enter your admin password" autocomplete="current-password" style="padding:10px 12px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+        </label>
+        <div id="deleteProjectError" class="error-text" style="display:none; margin-top:8px;"></div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+            <button id="deleteProjectCancelBtn" class="btn-secondary" style="flex:1; justify-content:center;">Cancel</button>
+            <button id="deleteProjectConfirmBtn" style="flex:1; justify-content:center; background:#e53935; border-color:#e53935;">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div id="logOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:20;">
+    <div class="auth-card" style="width:80%; max-width:900px; height: 80vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 id="logTitle" style="margin: 0;">Project Logs</h2>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" id="downloadLogBtn" class="btn-secondary btn-sm">Download</button>
+                <button type="button" id="closeLogBtn" class="btn-secondary btn-sm">Close</button>
+            </div>
+        </div>
+        <pre id="logContent" style="flex: 1; overflow: auto; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px; font-size: 13px; margin: 0; white-space: pre-wrap; word-wrap: break-word;"></pre>
+    </div>
+</div>
+
+<div id="referenceOverlay" class="auth-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:20;">
+    <div id="referenceCard" class="auth-card" style="width:80%; height: 80vh; min-width: 360px; min-height: 220px; max-width: 95vw; max-height: 95vh; display: flex; flex-direction: column; resize: both; overflow: auto;">
+        <div id="referenceHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; cursor: move; user-select: none;">
+            <h2 style="margin: 0;">Configuration Hints (CONFIGURATION.md)</h2>
+            <button type="button" id="closeReferenceBtn" class="btn-secondary btn-sm">Close</button>
+        </div>
+        <pre id="referenceContent" style="flex: 1; overflow: auto; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px; font-size: 13px; margin: 0; white-space: pre-wrap; word-wrap: break-word;"></pre>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

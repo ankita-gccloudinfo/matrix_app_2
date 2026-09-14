@@ -1,0 +1,146 @@
+{
+  "head_html": "<head>\n<meta charset=\"utf-8\"/>\n<title>Cyber Threat &amp; Intelligence Dossier</title>\n<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap\" rel=\"stylesheet\"/>\n<style>\n  :root {\n    --bg: #F8FAFC;\n    --card: #FFFFFF;\n    --border: #E2E8F0;\n    --ink: #0F172A;\n    --text: #334155;\n    --muted: #64748B;\n    --brand: #4338CA;\n    --brand-light: #EEF2FF;\n    --red: #E11D48;\n    --red-bg: #FFE4E6;\n    --green: #059669;\n    --green-bg: #D1FAE5;\n    --amber: #D97706;\n    --amber-bg: #FEF3C7;\n  }\n  * { box-sizing: border-box; }\n  body {\n    margin: 0;\n    font-family: 'Inter', sans-serif;\n    background: var(--bg);\n    color: var(--text);\n    font-size: 13.5px;\n    line-height: 1.6;\n  }\n  .page {\n    max-width: 880px;\n    margin: 0 auto;\n    padding: 32px;\n    page-break-after: always;\n  }\n  .doc-header {\n    border-bottom: 2px solid var(--brand);\n    padding-bottom: 18px;\n    margin-bottom: 24px;\n    display: flex;\n    justify-content: space-between;\n    align-items: flex-end;\n  }\n  .doc-header .logo-area h2 {\n    margin: 0;\n    font-size: 13px;\n    font-family: 'JetBrains Mono', monospace;\n    letter-spacing: .08em;\n    color: var(--brand);\n    text-transform: uppercase;\n  }\n  .doc-header .logo-area h1 {\n    margin: 6px 0 0 0;\n    font-size: 22px;\n    color: var(--ink);\n    font-weight: 800;\n  }\n  .doc-header .meta-stamp {\n    text-align: right;\n    font-family: 'JetBrains Mono', monospace;\n    font-size: 11px;\n    color: var(--muted);\n  }\n\n  .stat-band {\n    display: grid;\n    grid-template-columns: repeat(5, 1fr);\n    gap: 12px;\n    margin-bottom: 24px;\n  }\n  .stat-tile {\n    background: var(--card);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 12px 14px;\n    break-inside: avoid !important;\n  }\n  .stat-tile .num {\n    font-size: 20px;\n    font-weight: 800;\n    color: var(--ink);\n  }\n  .stat-tile .lbl {\n    font-size: 11px;\n    color: var(--muted);\n    font-weight: 600;\n    text-transform: uppercase;\n    margin-top: 2px;\n  }\n\n  .section-card {\n    background: var(--card);\n    border: 1px solid var(--border);\n    border-radius: 10px;\n    padding: 20px 22px;\n    margin-bottom: 22px;\n    break-inside: avoid !important;\n  }\n  .section-card h3 {\n    margin: 0 0 16px 0;\n    font-size: 14px;\n    font-weight: 700;\n    color: var(--ink);\n    text-transform: uppercase;\n    letter-spacing: .04em;\n    display: flex;\n    align-items: center;\n    gap: 8px;\n  }\n\n  .bar-grid {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    gap: 20px;\n  }\n  .bar-row {\n    display: flex;\n    align-items: center;\n    gap: 12px;\n    margin-bottom: 10px;\n  }\n  .bar-label {\n    width: 90px;\n    font-size: 12.5px;\n    color: var(--muted);\n    font-weight: 500;\n    flex-shrink: 0;\n  }\n  .bar-track {\n    flex: 1;\n    background: #F1F5F9;\n    border-radius: 6px;\n    height: 12px;\n    overflow: hidden;\n  }\n  .bar-fill {\n    height: 100%;\n    border-radius: 6px;\n  }\n  .bar-count {\n    width: 50px;\n    text-align: right;\n    font-size: 12.5px;\n    font-weight: 700;\n    color: var(--ink);\n    flex-shrink: 0;\n  }\n\n  .tag-cloud {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 8px;\n  }\n  .tag-chip {\n    background: var(--brand-light);\n    color: var(--brand);\n    border: 1px solid #C7D2FE;\n    padding: 4px 12px;\n    border-radius: 20px;\n    font-size: 12px;\n    font-weight: 600;\n  }\n\n  .post-card {\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 14px 16px;\n    margin-bottom: 12px;\n    background: #FAFBFD;\n    break-inside: avoid !important;\n  }\n  .post-meta {\n    font-size: 12px;\n    color: var(--muted);\n    font-family: 'JetBrains Mono', monospace;\n    margin-bottom: 6px;\n  }\n  .post-text {\n    font-size: 13px;\n    line-height: 1.55;\n    color: var(--ink);\n  }\n  .sentiment-chip {\n    display: inline-block;\n    padding: 2px 8px;\n    border-radius: 4px;\n    font-size: 10px;\n    font-weight: 700;\n    text-transform: uppercase;\n    margin-left: 6px;\n  }\n  .sentiment-chip.negative { background: var(--red-bg); color: var(--red); }\n  .sentiment-chip.neutral { background: #E2E8F0; color: #475569; }\n  .sentiment-chip.positive { background: var(--green-bg); color: var(--green); }\n\n  table {\n    width: 100%;\n    border-collapse: collapse;\n    font-size: 12.5px;\n  }\n  th {\n    text-align: left;\n    background: #F8FAFC;\n    color: var(--muted);\n    font-weight: 700;\n    text-transform: uppercase;\n    font-size: 11px;\n    padding: 9px 12px;\n    border-bottom: 2px solid var(--border);\n  }\n  td {\n    padding: 10px 12px;\n    border-bottom: 1px solid var(--border);\n  }\n\n  .footer-bar {\n    margin-top: 30px;\n    padding-top: 14px;\n    border-top: 1px solid var(--border);\n    display: flex;\n    justify-content: space-between;\n    font-size: 11px;\n    color: var(--muted);\n    font-family: 'JetBrains Mono', monospace;\n  }\n</style>\n</head>",
+  "tagged_body_html": "<body>\n<!-- PAGE 1: Overview & Signal Analytics -->\n<div class=\"page\">\n<div class=\"doc-header\">\n<div class=\"logo-area\">\n<h2>UP Police · Cyber Crime &amp; Social Intelligence Unit</h2>\n<h1>SAMPLE_TOPIC_TITLE</h1>\n</div>\n<div class=\"meta-stamp\">\n<div>CONFIDENTIAL DOSSIER</div>\n<div>REF: MATRIX-INTEL-AUTO</div>\n</div>\n</div>\n<div class=\"stat-band\">\n<div class=\"stat-tile\">\n<div class=\"num\" data-slot=\"s1\">1,284</div>\n<div class=\"lbl\">Total Posts</div>\n</div>\n<div class=\"stat-tile\">\n<div class=\"num\" data-slot=\"s2\">9,410</div>\n<div class=\"lbl\">Likes</div>\n</div>\n<div class=\"stat-tile\">\n<div class=\"num\" data-slot=\"s3\">1,022</div>\n<div class=\"lbl\">Comments</div>\n</div>\n<div class=\"stat-tile\">\n<div class=\"num\" data-slot=\"s4\">3,650</div>\n<div class=\"lbl\">Shares</div>\n</div>\n<div class=\"stat-tile\">\n<div class=\"num\" data-slot=\"s5\">42,190</div>\n<div class=\"lbl\">Views</div>\n</div>\n</div>\n<div class=\"section-card\">\n<h3>Signal Sentiment &amp; Platform Distribution</h3>\n<div class=\"bar-grid\">\n<div>\n<h4 style=\"margin:0 0 10px;font-size:12px;color:var(--muted);text-transform:uppercase;\">Sentiment Ratio</h4>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Negative</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:65%;background:var(--red);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s6\">702</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Neutral</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:25%;background:var(--amber);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s7\">411</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Positive</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:10%;background:var(--green);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s8\">171</div>\n</div>\n</div>\n<div>\n<h4 style=\"margin:0 0 10px;font-size:12px;color:var(--muted);text-transform:uppercase;\">Platform Spread</h4>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Twitter/X</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:55%;background:var(--brand);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s9\">616</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Facebook</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:30%;background:var(--brand);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s10\">347</div>\n</div>\n<div class=\"bar-row\">\n<div class=\"bar-label\">Instagram</div>\n<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:15%;background:var(--brand);\"></div></div>\n<div class=\"bar-count\" data-slot=\"s11\">205</div>\n</div>\n</div>\n</div>\n</div>\n<div class=\"section-card\">\n<h3>Extracted Narrative Keywords &amp; Incident Tags</h3>\n<div class=\"tag-cloud\" data-slot=\"s12\">\n<span class=\"tag-chip\">sample_keyword_one</span>\n<span class=\"tag-chip\">sample_keyword_two</span>\n<span class=\"tag-chip\">sample_keyword_three</span>\n<span class=\"tag-chip\">#SampleTagOne</span>\n<span class=\"tag-chip\">#SampleTagTwo</span>\n</div>\n</div>\n<div class=\"footer-bar\">\n<span>UP POLICE CYBER COMMAND</span>\n<span>PAGE 1 OF 2</span>\n</div>\n</div>\n<!-- PAGE 2: Evidence Excerpts & Handle Accountability -->\n<div class=\"page\">\n<div class=\"section-card\" data-slot=\"s13\">\n<h3>Intercepted Social Media Evidence</h3>\n<div class=\"post-card\">\n<div class=\"post-meta\">\n        @sample_author_1 · Twitter/X · 2026-01-01\n        <span class=\"sentiment-chip negative\">Negative</span>\n</div>\n<div class=\"post-text\">Sample placeholder evidence post text — replaced dynamically by real database excerpts.</div>\n</div>\n<div class=\"post-card\">\n<div class=\"post-meta\">\n        @sample_author_2 · Facebook · 2026-01-02\n        <span class=\"sentiment-chip neutral\">Neutral</span>\n</div>\n<div class=\"post-text\">Another sample placeholder evidence post text — replaced dynamically by real database excerpts.</div>\n</div>\n</div>\n<div class=\"section-card\">\n<h3>Monitored Government &amp; Political Accounts Tagged</h3>\n<table data-slot=\"s14\">\n<thead>\n<tr>\n<th>Account Handle</th>\n<th>Designation / Category</th>\n<th>Source Channel</th>\n<th>Mentions Count</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>@sample_handle_1</td>\n<td>District Police</td>\n<td>Twitter/X</td>\n<td>118</td>\n</tr>\n<tr>\n<td>@sample_handle_2</td>\n<td>Headquarters</td>\n<td>Twitter/X</td>\n<td>93</td>\n</tr>\n</tbody>\n</table>\n</div>\n<div class=\"footer-bar\">\n<span>UP POLICE CYBER COMMAND</span>\n<span>PAGE 2 OF 2</span>\n</div>\n</div>\n</body>",
+  "slots": [
+    {
+      "slot_id": "s1",
+      "slot_type": "stat_number",
+      "sample_text": "1,284",
+      "context_label": "Total Posts",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "total_posts",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s2",
+      "slot_type": "stat_number",
+      "sample_text": "9,410",
+      "context_label": "Likes",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_likes",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s3",
+      "slot_type": "stat_number",
+      "sample_text": "1,022",
+      "context_label": "Comments",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_comments",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s4",
+      "slot_type": "stat_number",
+      "sample_text": "3,650",
+      "context_label": "Shares",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_shares",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s5",
+      "slot_type": "stat_number",
+      "sample_text": "42,190",
+      "context_label": "Views",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "engagement_totals.total_views",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s6",
+      "slot_type": "stat_number",
+      "sample_text": "702",
+      "context_label": "Negative",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.negative",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s7",
+      "slot_type": "stat_number",
+      "sample_text": "411",
+      "context_label": "Neutral",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.neutral",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s8",
+      "slot_type": "stat_number",
+      "sample_text": "171",
+      "context_label": "Positive",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "sentiment_counts.positive",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s9",
+      "slot_type": "stat_number",
+      "sample_text": "616",
+      "context_label": "Twitter/X",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.TWITTER",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s10",
+      "slot_type": "stat_number",
+      "sample_text": "347",
+      "context_label": "Facebook",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.facebook",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s11",
+      "slot_type": "stat_number",
+      "sample_text": "205",
+      "context_label": "Instagram",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "platform_counts.Instagram",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s12",
+      "slot_type": "chip_list",
+      "sample_text": "sample_keyword_onesample_keyword_twosample_keyword_three#SampleTagOne#SampleTagTwo",
+      "context_label": "",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "keywords",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s13",
+      "slot_type": "post_cards",
+      "sample_text": "Intercepted Social Media Evidence@sample_author_1 · Twitter/X · 2026-01-01NegativeSample placeholder evidence post text ",
+      "context_label": "",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": "top_posts",
+      "status": "clean"
+    },
+    {
+      "slot_id": "s14",
+      "slot_type": "table_rows",
+      "sample_text": "Account HandleDesignation / CategorySource ChannelMentions Count@sample_handle_1District PoliceTwitter/X118@sample_handl",
+      "context_label": "",
+      "chips": [],
+      "meaning_text": "",
+      "maps_to": null,
+      "status": "clean"
+    }
+  ]
+}

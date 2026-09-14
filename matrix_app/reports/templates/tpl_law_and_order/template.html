@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Law &amp; Order Situation Assessment — Uttar Pradesh Police</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --crimson: #991B1B;
+    --navy: #0F172A;
+    --gold: #D97706;
+    --bg: #FAFAF9;
+    --card-bg: #FFFFFF;
+    --border: #E7E5E4;
+    --text: #1C1917;
+    --muted: #78716C;
+    --pos: #15803D;
+    --neg: #B91C1C;
+    --neu: #64748B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Work Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 36px;
+    page-break-after: always;
+  }
+  .govt-header {
+    text-align: center;
+    border-bottom: 2px solid var(--crimson);
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .emblem-title {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    letter-spacing: .15em;
+    color: var(--crimson);
+    margin-bottom: 4px;
+  }
+  .dept-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .report-heading {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--navy);
+    margin: 0 0 6px 0;
+  }
+  .sec-pill {
+    display: inline-block;
+    background: #FEF2F2;
+    color: var(--crimson);
+    border: 1px solid #FECACA;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 12px;
+    border-radius: 4px;
+  }
+
+  .stat-deck {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--crimson);
+    border-radius: 6px;
+    padding: 12px 14px;
+    text-align: center;
+    break-inside: avoid !important;
+  }
+  .stat-box .val {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--navy);
+  }
+  .stat-box .lbl {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    break-inside: avoid !important;
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--crimson);
+    margin: 0 0 14px 0;
+    border-bottom: 1px solid #F5F5F4;
+    padding-bottom: 6px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .bar-label {
+    width: 90px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .bar-track {
+    flex: 1;
+    background: #F5F5F4;
+    border-radius: 3px;
+    height: 10px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+  .bar-count {
+    width: 45px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--navy);
+    flex-shrink: 0;
+  }
+
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag-chip {
+    background: #F5F5F4;
+    border: 1px solid #E7E5E4;
+    color: var(--navy);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    text-align: left;
+    background: #FAFAF9;
+    color: var(--navy);
+    font-weight: 700;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .official-seal {
+    text-align: right;
+    margin-top: 24px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="govt-header">
+    <div class="emblem-title">UTTAR PRADESH POLICE HEADQUARTERS</div>
+    <div class="dept-title">LAW &amp; ORDER INTELLIGENCE DIRECTORATE</div>
+    <div class="sec-pill">STRICTLY CONFIDENTIAL — OFFICIAL ASSESSMENT</div>
+    <h1 class="report-heading" style="margin-top:10px;">SAMPLE_TOPIC_TITLE</h1>
+  </div>
+
+  <div class="stat-deck">
+    <div class="stat-box">
+      <div class="val">1,284</div>
+      <div class="lbl">Total Posts</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">9,410</div>
+      <div class="lbl">Likes</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">1,022</div>
+      <div class="lbl">Comments</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">3,650</div>
+      <div class="lbl">Shares</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="panel">
+      <div class="panel-title">Public Sentiment Index</div>
+      <div class="bar-row">
+        <div class="bar-label">Negative</div>
+        <div class="bar-track"><div class="bar-fill" style="width:65%;background:var(--neg);"></div></div>
+        <div class="bar-count">702</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Neutral</div>
+        <div class="bar-track"><div class="bar-fill" style="width:25%;background:var(--neu);"></div></div>
+        <div class="bar-count">411</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Positive</div>
+        <div class="bar-track"><div class="bar-fill" style="width:10%;background:var(--pos);"></div></div>
+        <div class="bar-count">171</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Platform Dissemination</div>
+      <div class="bar-row">
+        <div class="bar-label">Twitter/X</div>
+        <div class="bar-track"><div class="bar-fill" style="width:55%;background:var(--navy);"></div></div>
+        <div class="bar-count">616</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Facebook</div>
+        <div class="bar-track"><div class="bar-fill" style="width:30%;background:var(--navy);"></div></div>
+        <div class="bar-count">347</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Instagram</div>
+        <div class="bar-track"><div class="bar-fill" style="width:15%;background:var(--navy);"></div></div>
+        <div class="bar-count">205</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Key Narrative Terms &amp; Focal Points</div>
+    <div class="tag-cloud">
+      <span class="tag-chip">sample_keyword_1</span>
+      <span class="tag-chip">sample_keyword_2</span>
+      <span class="tag-chip">sample_keyword_3</span>
+      <span class="tag-chip">#SampleHashtag</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Monitored Institutional Handles Tagged</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Official Handle</th>
+          <th>Jurisdiction / Category</th>
+          <th>Platform</th>
+          <th>Mentions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>@sample_handle_1</td>
+          <td>District Police</td>
+          <td>Twitter/X</td>
+          <td>118</td>
+        </tr>
+        <tr>
+          <td>@sample_handle_2</td>
+          <td>Headquarters</td>
+          <td>Twitter/X</td>
+          <td>93</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="official-seal">
+    MATRIX COMMAND DIRECTORATE · U.P. POLICE
+  </div>
+
+</div>
+</body>
+</html>
+

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligence Report - Social Media Monitoring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-dark: #0a1929;
+            --secondary-dark: #1a3a5f;
+            --accent-blue: #2563eb;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-amber: #f59e0b;
+            --light-gray: #f8fafc;
+            --medium-gray: #e2e8f0;
+            --dark-gray: #64748b;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--light-gray);
+            color: var(--primary-dark);
+            line-height: 1.6;
+        }
+        
+        .sentiment-negative {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--accent-red);
+        }
+        
+        .sentiment-neutral {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--accent-amber);
+        }
+        
+        .sentiment-positive {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+        }
+        
+        .platform-twitter {
+            border-left: 4px solid #1da1f2;
+        }
+        
+        .platform-instagram {
+            border-left: 4px solid #e1306c;
+        }
+        
+        .platform-facebook {
+            border-left: 4px solid #1877f2;
+        }
+        
+        .platform-youtube {
+            border-left: 4px solid #ff0000;
+        }
+        
+        .platform-whatsapp {
+            border-left: 4px solid #25d366;
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .chart-bar {
+            transition: height 0.5s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-6">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-900 to-blue-700 text-white p-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold">Social Media Intelligence Report</h1>
+                    <p class="mt-2 text-blue-100">Monitoring & Analysis Dashboard</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-blue-100">Generated on</p>
+                    <p class="font-semibold">November 15, 2023</p>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center">
+                <div class="bg-white/20 px-4 py-2 rounded-full">
+                    <span class="font-medium">Topic:</span> Community Safety Concerns
+                </div>
+            </div>
+        </header>
+
+        <!-- Summary Section -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Executive Summary</h2>
+            <p class="text-gray-700 mb-3">Analysis of social media activity related to community safety concerns reveals a moderate level of engagement with predominantly neutral sentiment. Key themes include public safety awareness and community response protocols.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800">Total Mentions</h3>
+                    <p class="text-2xl font-bold mt-1">1,284</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800">Engagement Rate</h3>
+                    <p class="text-2xl font-bold mt-1">2.7%</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800">Active Platforms</h3>
+                    <p class="text-2xl font-bold mt-1">4</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sentiment Analysis -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Sentiment Analysis</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex flex-col items-center p-4 bg-red-50 rounded-lg">
+                    <div class="text-3xl font-bold text-red-600">32%</div>
+                    <div class="mt-2 text-red-700">Negative</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-amber-50 rounded-lg">
+                    <div class="text-3xl font-bold text-amber-600">48%</div>
+                    <div class="mt-2 text-amber-700">Neutral</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-green-50 rounded-lg">
+                    <div class="text-3xl font-bold text-green-600">20%</div>
+                    <div class="mt-2 text-green-700">Positive</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Platform Distribution -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Platform Distribution</h2>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                        <span class="text-blue-700 font-bold">T</span>
+                    </div>
+                    <div class="font-semibold">Twitter</div>
+                    <div class="text-lg font-bold mt-1">42%</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center mb-2">
+                        <span class="text-pink-700 font-bold">I</span>
+                    </div>
+                    <div class="font-semibold">Instagram</div>
+                    <div class="text-lg font-bold mt-1">28%</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                        <span class="text-blue-700 font-bold">F</span>
+                    </div>
+                    <div class="font-semibold">Facebook</div>
+                    <div class="text-lg font-bold mt-1">18%</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-2">
+                        <span class="text-red-700 font-bold">Y</span>
+                    </div>
+                    <div class="font-semibold">YouTube</div>
+                    <div class="text-lg font-bold mt-1">8%</div>
+                </div>
+                <div class="flex flex-col items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-2">
+                        <span class="text-green-700 font-bold">W</span>
+                    </div>
+                    <div class="font-semibold">WhatsApp</div>
+                    <div class="text-lg font-bold mt-1">4%</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engagement Metrics -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Engagement Metrics</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-gray-500">Likes</div>
+                    <div class="text-2xl font-bold mt-1">2,847</div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-gray-500">Comments</div>
+                    <div class="text-2xl font-bold mt-1">1,203</div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-gray-500">Shares</div>
+                    <div class="text-2xl font-bold mt-1">892</div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <div class="text-gray-500">Views</div>
+                    <div class="text-2xl font-bold mt-1">15,678</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Posts -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Top Posts</h2>
+            <div class="space-y-4">
+                <!-- Post 1 -->
+                <div class="p-4 border-l-4 platform-twitter bg-white rounded-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-semibold">John Smith</div>
+                            <div class="text-sm text-gray-500">Twitter • Nov 14, 2023</div>
+                        </div>
+                        <span class="sentiment-neutral px-2 py-1 rounded-full text-xs font-medium">Neutral</span>
+                    </div>
+                    <p class="mt-3 text-gray-700">Community safety meeting scheduled for next week. Please attend to discuss local concerns and response protocols. #SafetyFirst #Community</p>
+                </div>
+                
+                <!-- Post 2 -->
+                <div class="p-4 border-l-4 platform-instagram bg-white rounded-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-semibold">Sarah Johnson</div>
+                            <div class="text-sm text-gray-500">Instagram • Nov 13, 2023</div>
+                        </div>
+                        <span class="sentiment-positive px-2 py-1 rounded-full text-xs font-medium">Positive</span>
+                    </div>
+                    <p class="mt-3 text-gray-700">Great turnout at yesterday's neighborhood watch training! Thanks to everyone who participated and helped strengthen our community bonds. 🙌</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trending Topics -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Trending Topics</h2>
+            <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">#CommunitySafety</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">#NeighborhoodWatch</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">#PublicSafety</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">#EmergencyPreparedness</span>
+                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">#LocalSecurity</span>
+            </div>
+        </section>
+
+        <!-- Emerging Trends -->
+        <section class="p-6 border-b">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Emerging Trends</h2>
+            <div class="space-y-4">
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <h3 class="font-semibold">Increased Focus on Digital Literacy</h3>
+                    <p class="mt-2 text-gray-700">Growing discussions around digital safety and misinformation prevention among community members.</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <h3 class="font-semibold">Collaboration Between Agencies</h3>
+                    <p class="mt-2 text-gray-700">Cross-agency coordination efforts gaining traction in social media engagement strategies.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Intelligence Summary -->
+        <section class="p-6">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">Intelligence Summary</h2>
+            <div class="prose max-w-none">
+                <p class="text-gray-700">The monitored social media landscape shows a generally stable conversation around community safety topics. Negative sentiment appears to be primarily focused on procedural concerns rather than substantive threats. Positive engagement continues to be driven by community participation in safety initiatives.</p>
+                <p class="mt-3 text-gray-700">Key indicators suggest continued community interest in collaborative safety measures, with minimal signs of escalating tensions or immediate threats. Ongoing monitoring is recommended to track evolving patterns in community engagement.</p>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="p-6 bg-gray-50 text-center text-sm text-gray-500 border-t">
+            <p>© 2023 Police Intelligence Division | Confidential Report</p>
+        </footer>
+    </div>
+</body>
+</html>

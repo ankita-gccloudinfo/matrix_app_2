@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zero-MySQL RAG Architecture · Complete View</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg: #07090f; --text: #e2e8f0; --muted: #64748b; --border: rgba(255,255,255,0.07);
+      --qdrant: #ff0055; --neo4j: #018bff; --bridge: #a78bfa; --rag: #10b981;
+      --current: #22c55e; --future: #f59e0b;
+      --font: 'Outfit', sans-serif; --mono: 'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at 0% 0%, rgba(255,0,85,0.05) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(1,139,255,0.05) 0%, transparent 40%);
+    }
+
+    .header { text-align: center; padding: 3rem 2rem 2rem; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+    .header h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; color: #fff; }
+    .header p { color: var(--muted); font-size: 1rem; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+    .highlight { background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3); }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 3rem; }
+
+    /* ── Two Column Setup ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+
+    .card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+    .card-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+    .logo { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; color: #fff; }
+    .q-logo { background: linear-gradient(135deg, #7a0028, #ff0055); }
+    .n-logo { background: linear-gradient(135deg, #00406e, #018bff); }
+    .card-title { font-size: 1.4rem; font-weight: 700; }
+    .card-desc { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+    
+    .card-body { padding: 0; display: flex; flex-direction: column; flex: 1; }
+    
+    /* ── Status Sections ── */
+    .status-section { padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.04); flex: 1; }
+    .status-section:last-child { border-bottom: none; }
+    .status-section.current { background: rgba(34,197,94,0.02); }
+    .status-section.future { background: rgba(245,158,11,0.02); }
+    
+    .status-title { 
+      font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; 
+      margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .status-title.t-current { color: var(--current); }
+    .status-title.t-future { color: var(--future); }
+    
+    .item-row { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+    .item-row:last-child { margin-bottom: 0; }
+    .item-badge { flex-shrink: 0; font-family: var(--mono); font-size: 0.75rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; }
+    .b-current { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .b-future { background: rgba(245,158,11,0.1); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .item-text { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+    .item-text strong { color: var(--text); }
+
+    /* ── The RAG Engine ── */
+    .rag-section { background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 16px; padding: 2rem; text-align: center; }
+    .rag-title { font-size: 1.5rem; font-weight: 800; color: #10b981; margin-bottom: 1rem; }
+    .rag-flow { display: flex; align-items: stretch; justify-content: center; gap: 1rem; margin-top: 2rem; text-align: left; }
+    .flow-step { background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; flex: 1; position: relative; }
+    .step-num { position: absolute; top: -15px; left: -15px; width: 30px; height: 30px; background: #10b981; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1rem; }
+    .step-title { font-weight: 700; margin-bottom: 0.75rem; font-size: 1.1rem; }
+    .step-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem; }
+    .code-sm { font-family: var(--mono); font-size: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 6px; color: #a78bfa; line-height: 1.4; }
+
+    /* ── Graph Section ── */
+    .graph-section { background: rgba(1,139,255,0.05); border: 1px solid rgba(1,139,255,0.2); border-radius: 16px; padding: 2rem; margin-bottom: 3rem; }
+    .graph-title { font-size: 1.5rem; font-weight: 800; color: var(--neo4j); margin-bottom: 0.5rem; }
+    #network-container { height: 700px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,0.4); margin-top: 1.5rem; overflow: hidden; }
+
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>The <span class="highlight">Zero-MySQL</span> RAG Architecture</h1>
+  <p>How to configure Qdrant and Neo4j so they contain 100% of the knowledge from your 18 tables. If MySQL is deleted tomorrow, this RAG system will still answer <strong>any question from any direction</strong>.</p>
+</div>
+
+<div class="container">
+
+  <!-- DATABASE SPLIT -->
+  <div class="grid-2">
+    
+    <!-- QDRANT -->
+    <div class="card" style="border-color: rgba(255,0,85,0.3)">
+      <div class="card-header">
+        <div class="logo q-logo">Q</div>
+        <div>
+          <div class="card-title" style="color:var(--qdrant)">Qdrant: The Text Engine</div>
+          <div class="card-desc">For Semantic Understanding ("What does it mean?")</div>
+        </div>
+      </div>
+      
+      <div class="card-body">
+        <div class="status-section current">
+          <div class="status-title t-current">✅ What you already have right now</div>
+          <div class="item-row">
+            <div class="item-badge b-current">entity_type: "CONTENT"</div>
+            <div class="item-text">
+              <strong>analyzed_data</strong><br/>
+              Your script has embedded the <code>input_text</code> from the <code>analyzed_data</code> table into Qdrant's <code>content_index</code>.<br/>
+              <em>Current Payload:</em> Includes <code>source_id</code>, <code>author</code>, <code>sentiment</code>, <code>district</code>, <code>broad_category</code>.
+            </div>
+          </div>
+        </div>
+        
+        <div class="status-section future">
+          <div class="status-title t-future">🚀 What we must update/add</div>
+          <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem; line-height:1.5;">To answer ANY question without MySQL, Qdrant needs to index the remaining text-heavy tables.</p>
+          
+          <div class="item-row">
+            <div class="item-badge b-future">entity_type: "CONTENT"</div>
+            <div class="item-text">
+              <strong>Replies & Comments</strong><br/>
+              We must add vectors for <code>reply</code>, <code>fb_comments</code>, and <code>insta_comments</code> text.
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-badge b-future">entity_type: "INCIDENT"</div>
+            <div class="item-text">
+              <strong>Topic Descriptions</strong><br/>
+              We must add vectors for <code>topic.hindi_title</code> so users can search "incidents about protests" semantically.
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-badge b-future">entity_type: "REPORT"</div>
+            <div class="item-text">
+              <strong>Internal District Reports</strong><br/>
+              We must add vectors for <code>district_internal_report.crime_type</code> / FIR details.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEO4J -->
+    <div class="card" style="border-color: rgba(1,139,255,0.3)">
+      <div class="card-header">
+        <div class="logo n-logo">N</div>
+        <div>
+          <div class="card-title" style="color:var(--neo4j)">Neo4j: The Relational Engine</div>
+          <div class="card-desc">For Connections ("How are they linked?")</div>
+        </div>
+      </div>
+      
+      <div class="card-body">
+        <div class="status-section current">
+          <div class="status-title t-current">✅ What you already have right now</div>
+          <div class="item-row">
+            <div class="item-badge b-current">5 Node Types</div>
+            <div class="item-text">
+              <strong>Basic Subnetwork</strong><br/>
+              Your <code>neo4j_schema_builder.py</code> script currently creates <code>Account</code>, <code>Content</code>, <code>Incident</code>, <code>Category</code>, and <code>Location</code> nodes by reading exactly what is in the Qdrant payload (which only came from <code>analyzed_data</code>).
+            </div>
+          </div>
+        </div>
+        
+        <div class="status-section future">
+          <div class="status-title t-future">🚀 What we must update/add</div>
+          <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1rem; line-height:1.5;">To answer "who is connected" or "did police respond", Neo4j must ingest the structure of the remaining 17 tables directly from MySQL.</p>
+          
+          <div class="item-row">
+            <div class="item-badge b-future">Social Edges</div>
+            <div class="item-text">
+              <strong>Followers & Connections</strong><br/>
+              We must read <code>profile_network</code> and <code>user_connections</code> to create <code>[:FOLLOWS]</code> and <code>[:CONNECTED_TO]</code> relationships between Account nodes.
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-badge b-future">Interaction Edges</div>
+            <div class="item-text">
+              <strong>Likes & Retweets</strong><br/>
+              We must read <code>post_user_interactions</code> to create <code>[:INTERACTED_WITH]</code> between Accounts and Content.
+            </div>
+          </div>
+          <div class="item-row">
+            <div class="item-badge b-future">Workflow Network</div>
+            <div class="item-text">
+              <strong>Tickets & Reports</strong><br/>
+              We must read <code>ticket_raised_table</code> and <code>district_internal_report</code> to create <code>Ticket</code> and <code>Report</code> nodes, and link them to <code>Incidents</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COMPLETE GRAPH VISUALIZATION -->
+  <div class="graph-section">
+    <div class="rag-title" style="color:var(--neo4j)">Neo4j: The Complete Relational Engine Graph</div>
+    <p style="color:var(--muted); font-size:0.95rem;">This interactive graph shows how all 18 tables are connected inside Neo4j. Drag nodes to explore the connections.</p>
+    
+    <div id="network-container"></div>
+  </div>
+
+  <!-- RAG FLOW -->
+  <div class="rag-section">
+    <div class="rag-title">How the RAG Agent answers ANY question</div>
+    <p style="color:var(--muted); font-size:0.95rem;">Because Qdrant has all the meaning, and Neo4j has all the connections, the Agent orchestrates them.</p>
+    
+    <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--bridge); border-radius: 8px; padding: 1rem; margin-top: 1.5rem; color: #fff; font-weight: 600;">
+      User Question: "Find all users who interact with sammer727 AND have posted hate speech about protests, and check if a ticket is raised in Lucknow."
+    </div>
+
+    <div class="rag-flow">
+      <!-- Step 1 -->
+      <div class="flow-step" style="border-color: rgba(255,0,85,0.4)">
+        <div class="step-num" style="background:#ff0055">1</div>
+        <div class="step-title" style="color:var(--qdrant)">Qdrant Semantic Search</div>
+        <div class="step-desc">
+          The Agent embeds "protests" and searches Qdrant for <code>CONTENT</code> and <code>INCIDENT</code> entities, applying the "Hate Speech" category filter.
+        </div>
+        <div class="code-sm">
+qdrant.search(<br/>
+&nbsp;&nbsp;vector=embed("protests"),<br/>
+&nbsp;&nbsp;filter={<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"entity_type": "CONTENT",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"broad_category": "HATE SPEECH"<br/>
+&nbsp;&nbsp;}<br/>
+)<br/>
+<span style="color:#64748b">// Returns List of neo4j_ids:</span><br/>
+<span style="color:#fff">["ad_111", "ad_222", "ad_333"]</span>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="flow-step" style="border-color: rgba(167,139,250,0.4)">
+        <div class="step-num" style="background:var(--bridge)">2</div>
+        <div class="step-title" style="color:var(--bridge)">Bridge (Pass IDs to Graph)</div>
+        <div class="step-desc">
+          The LLM takes the exact IDs returned by Qdrant (representing the semantic match) and passes them into a Neo4j Cypher query as a variable list.
+        </div>
+        <div class="code-sm">
+<span style="color:#64748b">// The LLM generates this array</span><br/>
+$qdrant_ids = ["ad_111", "ad_222", "ad_333"]<br/><br/>
+<span style="color:#64748b">// The LLM constructs the Cypher query</span><br/>
+<span style="color:#64748b">// based on the user's complex conditions.</span>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="flow-step" style="border-color: rgba(1,139,255,0.4)">
+        <div class="step-num" style="background:var(--neo4j)">3</div>
+        <div class="step-title" style="color:var(--neo4j)">Neo4j Graph Traversal</div>
+        <div class="step-desc">
+          Neo4j filters the Qdrant results through the social network AND checks the ticketing/location network simultaneously.
+        </div>
+        <div class="code-sm">
+MATCH (c:Content) WHERE c.post_id IN $qdrant_ids<br/>
+MATCH (u:Account)-[:POSTED]->(c)<br/>
+MATCH (u)-[:CONNECTED_TO|INTERACTED_WITH]-(:Account {username: 'sammer727'})<br/>
+MATCH (c)-[:BELONGS_TO]->(i:Incident)<br/>
+MATCH (t:Ticket)-[:RAISED_FOR]->(i)<br/>
+MATCH (t)-[:ASSIGNED_TO]->(:Location {name: 'Lucknow'})<br/>
+RETURN u.username, t.status
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Graph Initialization ──
+function buildGraph() {
+  const nodes = new vis.DataSet([
+    {id:'account',  label:'Account',   color:{background:'#3b82f6',border:'#1d4ed8'}, size:45, shape:'dot',    font:{size:15,color:'#fff',face:'Outfit',bold:true}, shadow:{enabled:true,color:'#3b82f688',size:25}},
+    {id:'content',  label:'Content',   color:{background:'#ec4899',border:'#be185d'}, size:45, shape:'dot',    font:{size:15,color:'#fff',face:'Outfit',bold:true}, shadow:{enabled:true,color:'#ec489988',size:25}},
+    {id:'incident', label:'Incident',  color:{background:'#10b981',border:'#047857'}, size:50, shape:'diamond',font:{size:15,color:'#fff',face:'Outfit',bold:true}, shadow:{enabled:true,color:'#10b98188',size:25}},
+    {id:'category', label:'Category',  color:{background:'#f59e0b',border:'#b45309'}, size:38, shape:'square', font:{size:14,color:'#fff',face:'Outfit',bold:true}, shadow:{enabled:true,color:'#f59e0b88',size:20}},
+    {id:'location', label:'Location',  color:{background:'#06b6d4',border:'#0e7490'}, size:38, shape:'square', font:{size:14,color:'#fff',face:'Outfit',bold:true}, shadow:{enabled:true,color:'#06b6d488',size:20}},
+    {id:'keyword',  label:'Keyword\n(NEW)', color:{background:'#8b5cf6',border:'#6d28d9'}, size:30, shape:'dot', font:{size:12,color:'#fff',face:'Outfit'}, shadow:{enabled:true,color:'#8b5cf688',size:15}},
+    {id:'hashtag',  label:'Hashtag\n(NEW)', color:{background:'#14b8a6',border:'#0f766e'}, size:30, shape:'dot', font:{size:12,color:'#fff',face:'Outfit'}, shadow:{enabled:true,color:'#14b8a688',size:15}},
+    {id:'ticket',   label:'Ticket\n(NEW)',  color:{background:'#f97316',border:'#c2410c'}, size:33, shape:'dot', font:{size:12,color:'#fff',face:'Outfit'}, shadow:{enabled:true,color:'#f9731688',size:15}},
+    {id:'report',   label:'Report\n(NEW)',  color:{background:'#ef4444',border:'#b91c1c'}, size:33, shape:'dot', font:{size:12,color:'#fff',face:'Outfit'}, shadow:{enabled:true,color:'#ef444488',size:15}},
+  ]);
+
+  const edges = new vis.DataSet([
+    // existing
+    {from:'account',  to:'content',  label:'POSTED',           color:{color:'#60a5fa'}, width:2.5, arrows:{to:{scaleFactor:.6}}, font:{color:'#60a5fa',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'account',  to:'account',  label:'FOLLOWS',          color:{color:'#34d399'}, width:2,   arrows:{to:{scaleFactor:.6}}, dashes:true,font:{color:'#34d399',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'},smooth:{type:'curvedCW',roundness:.3}},
+    {from:'content',  to:'content',  label:'REPLIED_TO',       color:{color:'#a78bfa'}, width:2,   arrows:{to:{scaleFactor:.6}}, dashes:true,font:{color:'#a78bfa',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'},smooth:{type:'curvedCCW',roundness:.3}},
+    {from:'content',  to:'incident', label:'BELONGS_TO',       color:{color:'#10b981'}, width:2.5, arrows:{to:{scaleFactor:.6}}, font:{color:'#10b981',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'content',  to:'category', label:'TAGGED_AS',        color:{color:'#f59e0b'}, width:2,   arrows:{to:{scaleFactor:.6}}, font:{color:'#f59e0b',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'content',  to:'location', label:'OCCURRED_IN',      color:{color:'#06b6d4'}, width:2,   arrows:{to:{scaleFactor:.6}}, font:{color:'#06b6d4',size:12,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'content',  to:'account',  label:'MENTIONS',         color:{color:'#f472b6'}, width:1.5, arrows:{to:{scaleFactor:.5}}, dashes:true,font:{color:'#f472b6',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'},smooth:{type:'curvedCW',roundness:.5}},
+    {from:'incident', to:'location', label:'OCCURRED_IN',      color:{color:'#06b6d4'}, width:1.5, arrows:{to:{scaleFactor:.5}}, font:{color:'#06b6d4',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    // new
+    {from:'account',  to:'content',  label:'INTERACTED_WITH',  color:{color:'#fb923c'}, width:1.5, arrows:{to:{scaleFactor:.5}}, dashes:true,font:{color:'#fb923c',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'},smooth:{type:'curvedCCW',roundness:.4}},
+    {from:'account',  to:'account',  label:'CONNECTED_TO',     color:{color:'#f97316'}, width:2,   arrows:{to:{scaleFactor:.5}}, dashes:true,font:{color:'#f97316',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'},smooth:{type:'curvedCCW',roundness:.5}},
+    {from:'account',  to:'category', label:'MONITORED_UNDER',  color:{color:'#fbbf24'}, width:1.5, arrows:{to:{scaleFactor:.5}}, dashes:true,font:{color:'#fbbf24',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'keyword',  to:'category', label:'MAPS_TO',          color:{color:'#8b5cf6'}, width:1.5, arrows:{to:{scaleFactor:.5}}, font:{color:'#8b5cf6',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'hashtag',  to:'category', label:'BELONGS_TO',       color:{color:'#14b8a6'}, width:1.5, arrows:{to:{scaleFactor:.5}}, font:{color:'#14b8a6',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'ticket',   to:'incident', label:'RAISED_FOR',       color:{color:'#f97316'}, width:2,   arrows:{to:{scaleFactor:.6}}, font:{color:'#f97316',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'ticket',   to:'location', label:'ASSIGNED_TO',      color:{color:'#f97316'}, width:1.5, arrows:{to:{scaleFactor:.5}}, font:{color:'#f97316',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'report',   to:'incident', label:'FILED_FOR',        color:{color:'#ef4444'}, width:2,   arrows:{to:{scaleFactor:.6}}, font:{color:'#ef4444',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+    {from:'report',   to:'location', label:'FILED_BY',         color:{color:'#ef4444'}, width:1.5, arrows:{to:{scaleFactor:.5}}, font:{color:'#ef4444',size:11,face:'Outfit',background:'rgba(7,9,15,.8)'}},
+  ]);
+
+  const net = new vis.Network(
+    document.getElementById('network-container'),
+    {nodes, edges},
+    {
+      physics:{solver:'forceAtlas2Based',forceAtlas2Based:{gravitationalConstant:-200,centralGravity:0.01,springLength:200,springConstant:0.06,damping:0.5},stabilization:{iterations:200}},
+      interaction:{hover:true,zoomView:true,dragNodes:true},
+      background:{color:'transparent'}
+    }
+  );
+  
+  net.once('stabilizationIterationsDone', () => {
+    net.setOptions({physics:{enabled:false}});
+  });
+}
+
+// Call on load
+window.onload = buildGraph;
+</script>
+</body>
+</html>

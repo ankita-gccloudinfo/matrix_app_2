@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Police Social Media Intelligence Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: '#0a1929',
+                        offwhite: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .sentiment-bar {
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .complaints { background-color: #fee2e2; color: #b91c1c; }
+        .commendations { background-color: #dcfce7; color: #166534; }
+        .card {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s ease-in-out;
+        }
+        .card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        .chip {
+            background-color: #e2e8f0;
+            color: #334155;
+        }
+    </style>
+</head>
+<body class="bg-offwhite text-gray-800">
+    <div class="max-w-4xl mx-auto px-6 py-8">
+        <!-- Header -->
+        <header class="mb-10">
+            <h1 class="text-3xl font-bold text-navy mb-2">Social Media Intelligence Report</h1>
+            <p class="text-gray-600">Public Safety Monitoring Dashboard</p>
+            <div class="border-t border-gray-200 mt-4 pt-4">
+                <p class="text-sm text-gray-500">Report Period: June 1-30, 2023 | Generated: July 5, 2023</p>
+            </div>
+        </header>
+
+        <!-- Summary Metrics -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold text-navy mb-6 pb-2 border-b border-gray-200">Summary Overview</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- Total Mentions -->
+                <div class="bg-white p-6 rounded-lg card">
+                    <h3 class="text-gray-500 text-sm font-medium mb-1">Total Mentions</h3>
+                    <p class="text-3xl font-bold text-navy">1,284</p>
+                    <p class="text-xs text-gray-500 mt-1">+12% from previous period</p>
+                </div>
+                
+                <!-- Platform Breakdown -->
+                <div class="bg-white p-6 rounded-lg card">
+                    <h3 class="text-gray-500 text-sm font-medium mb-3">Platform Distribution</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Twitter/X</span>
+                            <span class="text-sm font-medium">42%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: 42%"></div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Instagram</span>
+                            <span class="text-sm font-medium">28%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-500 h-2 rounded-full" style="width: 28%"></div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Facebook</span>
+                            <span class="text-sm font-medium">18%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: 18%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sentiment Analysis -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold text-navy mb-6 pb-2 border-b border-gray-200">Sentiment Analysis</h2>
+            
+            <div class="bg-white p-6 rounded-lg card mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-medium">Complaints vs. Commendations</h3>
+                    <div class="flex space-x-2">
+                        <span class="sentiment-bar complaints">Complaints: 68%</span>
+                        <span class="sentiment-bar commendations">Commendations: 32%</span>
+                    </div>
+                </div>
+                
+                <!-- Horizontal Bar Chart -->
+                <div class="flex items-center justify-between mt-4">
+                    <div class="w-full flex items-center">
+                        <div class="w-1/2 bg-red-100 h-8 rounded-l-lg flex items-center justify-end pr-2">
+                            <span class="text-red-800 font-medium">68%</span>
+                        </div>
+                        <div class="w-1/2 bg-green-100 h-8 rounded-r-lg flex items-center pl-2">
+                            <span class="text-green-800 font-medium">32%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Engagement Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-lg card text-center">
+                    <p class="text-gray-500 text-sm">Total Likes</p>
+                    <p class="text-xl font-semibold text-navy">4,231</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg card text-center">
+                    <p class="text-gray-500 text-sm">Comments</p>
+                    <p class="text-xl font-semibold text-navy">867</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg card text-center">
+                    <p class="text-gray-500 text-sm">Shares</p>
+                    <p class="text-xl font-semibold text-navy">312</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Keyword Chips -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold text-navy mb-4 pb-2 border-b border-gray-200">Key Topics</h2>
+            <div class="flex flex-wrap gap-2">
+                <span class="chip px-3 py-1 rounded-full text-sm">Community Policing</span>
+                <span class="chip px-3 py-1 rounded-full text-sm">Traffic Enforcement</span>
+                <span class="chip px-3 py-1 rounded-full text-sm">Emergency Response</span>
+                <span class="chip px-3 py-1 rounded-full text-sm">Crime Prevention</span>
+                <span class="chip px-3 py-1 rounded-full text-sm">Neighborhood Watch</span>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section>
+            <h2 class="text-xl font-semibold text-navy mb-6 pb-2 border-b border-gray-200">Recent Activity</h2>
+            
+            <div class="space-y-4">
+                <!-- Post Card 1 -->
+                <div class="bg-white p-5 rounded-lg card border-l-4 border-green-500">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h3 class="font-semibold text-navy">Officer Martinez</h3>
+                            <p class="text-sm text-gray-500">Instagram • 2 hours ago</p>
+                        </div>
+                        <span class="sentiment-bar commendations">Positive</span>
+                    </div>
+                    <p class="text-gray-700 mb-3">Great job responding quickly to the traffic accident on Highway 101. Community appreciates your professionalism!</p>
+                    <div class="flex space-x-2">
+                        <span class="text-xs text-gray-500">❤️ 42 | 💬 8 | 🔁 3</span>
+                    </div>
+                </div>
+                
+                <!-- Post Card 2 -->
+                <div class="bg-white p-5 rounded-lg card border-l-4 border-red-500">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h3 class="font-semibold text-navy">Local Resident</h3>
+                            <p class="text-sm text-gray-500">Twitter/X • 5 hours ago</p>
+                        </div>
+                        <span class="sentiment-bar complaints">Negative</span>
+                    </div>
+                    <p class="text-gray-700 mb-3">Why did it take so long to respond to our call? The dispatcher was rude and unhelpful. Very disappointed with service.</p>
+                    <div class="flex space-x-2">
+                        <span class="text-xs text-gray-500">❤️ 12 | 💬 21 | 🔁 5</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-12 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
+            <p>Intelligence Report Generated Automatically • Data Refreshed Every 2 Hours</p>
+        </footer>
+    </div>
+</body>
+</html>

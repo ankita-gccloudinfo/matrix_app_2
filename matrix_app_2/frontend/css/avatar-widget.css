@@ -1,0 +1,194 @@
+/* =========================================
+   PDF Expert Avatar Widget (bottom-right, persistent)
+   ========================================= */
+
+.avatar-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9500;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.avatar-widget-bubble {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    transition: transform 0.15s ease;
+}
+
+.avatar-widget-bubble:hover {
+    transform: scale(1.06);
+}
+
+.avatar-widget-bubble i {
+    width: 26px;
+    height: 26px;
+}
+
+.avatar-widget-panel {
+    width: 300px;
+    background: #0f172a;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.avatar-widget.open .avatar-widget-panel {
+    display: flex;
+}
+
+.avatar-widget-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.avatar-widget-title {
+    flex: 1;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.avatar-expert-select {
+    flex: 1;
+    background: #1e293b;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.avatar-widget-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-widget-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.avatar-widget-close i {
+    width: 16px;
+    height: 16px;
+}
+
+.avatar-widget-video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    display: block;
+}
+
+.avatar-widget-status {
+    color: #94a3b8;
+    font-size: 12px;
+    text-align: center;
+    padding: 8px 10px;
+}
+
+.avatar-expert-assign {
+    padding: 10px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.avatar-expert-assign-title {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.avatar-expert-assign-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.avatar-expert-assign-name {
+    flex: 1;
+    color: #cbd5e1;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.avatar-expert-assign-row select {
+    flex: 1;
+    background: #1e293b;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    font-size: 11px;
+    padding: 3px 5px;
+    min-width: 0;
+}
+
+/* =========================================
+   Docked mode — clicking the avatar bubble moves .avatar-widget-panel out
+   of the floating #avatarWidget and into #chatContainer (see the docking
+   logic in index.html), filling the main chat area instead of staying a
+   small bottom-right popup. .avatar-widget-panel.docked overrides the
+   floating-panel rules above since the panel is no longer a descendant of
+   .avatar-widget.open once it's moved.
+   ========================================= */
+
+.chat-container {
+    position: relative;
+}
+
+.chat-container.avatar-docked .messages {
+    display: none;
+}
+
+.avatar-widget-panel.docked {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 20;
+    border-radius: 16px;
+}
+
+.avatar-widget-panel.docked .avatar-widget-video {
+    flex: 1;
+    min-height: 0;
+    aspect-ratio: auto;
+    object-fit: cover;
+}

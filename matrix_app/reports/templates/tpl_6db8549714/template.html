@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Intelligence Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#1e40af',
+                        accent: '#f8fafc',
+                        dark: '#0f172a',
+                        light: '#f1f5f9'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .sentiment-negative {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        .sentiment-neutral {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .sentiment-positive {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .platform-twitter {
+            border-left: 4px solid #1da1f2;
+        }
+        .platform-instagram {
+            border-left: 4px solid #e1306c;
+        }
+        .platform-facebook {
+            border-left: 4px solid #1877f2;
+        }
+        .platform-youtube {
+            border-left: 4px solid #ff0000;
+        }
+        .platform-whatsapp {
+            border-left: 4px solid #25d366;
+        }
+        .chart-bar {
+            transition: height 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-accent text-dark">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-10">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-primary">Social Media Intelligence Report</h1>
+                    <p class="text-gray-600 mt-2">Public Safety Monitoring Dashboard</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-gray-500">Generated: <span class="font-medium">November 15, 2023</span></p>
+                    <p class="text-sm text-gray-500">Period: <span class="font-medium">Last 24 hours</span></p>
+                </div>
+            </div>
+            <div class="mt-6 h-1 bg-primary rounded-full"></div>
+        </header>
+
+        <!-- Summary Stats -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Report Overview</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 text-sm">Total Mentions</p>
+                            <p class="text-2xl font-bold">1,284</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 text-sm">Engagement Rate</p>
+                            <p class="text-2xl font-bold">24.7%</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-100 text-purple-600 mr-4">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 text-sm">Unique Authors</p>
+                            <p class="text-2xl font-bold">86</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-orange-100 text-orange-600 mr-4">
+                            <i class="fas fa-globe-americas"></i>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 text-sm">Platforms Monitored</p>
+                            <p class="text-2xl font-bold">5</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sentiment Analysis -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Sentiment Analysis</h2>
+            <div class="card bg-white p-6 rounded-lg">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="relative w-48 h-48">
+                            <svg viewBox="0 0 36 36" class="w-full h-full">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="30, 100"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-2xl font-bold">32%</span>
+                                <span class="text-xs text-gray-500">Negative</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="relative w-48 h-48">
+                            <svg viewBox="0 0 36 36" class="w-full h-full">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="45, 100"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-2xl font-bold">45%</span>
+                                <span class="text-xs text-gray-500">Neutral</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="relative w-48 h-48">
+                            <svg viewBox="0 0 36 36" class="w-full h-full">
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22c55e" stroke-width="3" stroke-dasharray="25, 100"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-2xl font-bold">23%</span>
+                                <span class="text-xs text-gray-500">Positive</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Platform Breakdown -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Platform Distribution</h2>
+            <div class="card bg-white p-6 rounded-lg">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                                    <span>Twitter/X</span>
+                                </div>
+                                <span class="font-medium">42%</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 rounded-full bg-pink-500 mr-2"></div>
+                                    <span>Instagram</span>
+                                </div>
+                                <span class="font-medium">28%</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 rounded-full bg-blue-600 mr-2"></div>
+                                    <span>Facebook</span>
+                                </div>
+                                <span class="font-medium">15%</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                                    <span>YouTube</span>
+                                </div>
+                                <span class="font-medium">8%</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                                    <span>WhatsApp</span>
+                                </div>
+                                <span class="font-medium">7%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="h-64 flex items-end space-x-2">
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="chart-bar w-10 bg-blue-500 rounded-t" style="height: 42%"></div>
+                                <span class="text-xs mt-2">Twitter</span>
+                            </div>
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="chart-bar w-10 bg-pink-500 rounded-t" style="height: 28%"></div>
+                                <span class="text-xs mt-2">Instagram</span>
+                            </div>
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="chart-bar w-10 bg-blue-600 rounded-t" style="height: 15%"></div>
+                                <span class="text-xs mt-2">Facebook</span>
+                            </div>
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="chart-bar w-10 bg-red-500 rounded-t" style="height: 8%"></div>
+                                <span class="text-xs mt-2">YouTube</span>
+                            </div>
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="chart-bar w-10 bg-green-500 rounded-t" style="height: 7%"></div>
+                                <span class="text-xs mt-2">WhatsApp</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Engagement Stats -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Engagement Metrics</h2>
+            <div class="card bg-white p-6 rounded-lg">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center p-4 bg-blue-50 rounded-lg">
+                        <p class="text-3xl font-bold text-blue-600">1,428</p>
+                        <p class="text-gray-600 mt-1">Likes</p>
+                    </div>
+                    <div class="text-center p-4 bg-green-50 rounded-lg">
+                        <p class="text-3xl font-bold text-green-600">863</p>
+                        <p class="text-gray-600 mt-1">Comments</p>
+                    </div>
+                    <div class="text-center p-4 bg-yellow-50 rounded-lg">
+                        <p class="text-3xl font-bold text-yellow-600">512</p>
+                        <p class="text-gray-600 mt-1">Shares</p>
+                    </div>
+                    <div class="text-center p-4 bg-purple-50 rounded-lg">
+                        <p class="text-3xl font-bold text-purple-600">3,847</p>
+                        <p class="text-gray-600 mt-1">Views</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trending Topics -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Trending Topics</h2>
+            <div class="card bg-white p-6 rounded-lg">
+                <div class="flex flex-wrap gap-2">
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">public safety</span>
+                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">community concerns</span>
+                    <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">emergency response</span>
+                    <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">social unrest</span>
+                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">crime prevention</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Top Posts -->
+        <section class="mb-10">
+            <h2 class="text-xl font-semibold mb-4 text-secondary">Top Posts</h2>
+            <div class="space-y-4">
+                <!-- Post 1 -->
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex">
+                        <div class="mr-4">
+                            <div class="bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16" />
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between">
+                                <h3 class="font-semibold">Community Watch</h3>
+                                <span class="text-sm text-gray-500">Twitter/X</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-1">Posted 2 hours ago</p>
+                            <p class="mt-3 text-gray-700">Safety concerns reported in downtown area. Multiple witnesses confirm suspicious activity near the intersection of Main St and Oak Ave. Requesting immediate patrol presence.</p>
+                            <div class="mt-3 flex items-center">
+                                <span class="sentiment-negative px-2 py-1 rounded text-xs font-medium mr-2">Negative</span>
+                                <span class="text-sm text-gray-500">12 likes • 5 comments</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Post 2 -->
+                <div class="card bg-white p-6 rounded-lg">
+                    <div class="flex">
+                        <div class="mr-4">
+                            <div class="bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16" />
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between">
+                                <h3 class="font-semibold">Local Police</h3>
+                                <span class="text-sm text-gray-500">Instagram</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-1">Posted 4 hours ago</p>
+                            <p class="mt-3 text-gray-700">Thank you to our community members who helped identify the suspect last night. Your vigilance helps keep our neighborhood safe. #CommunitySafety #PoliceResponse</p>
+                            <div class="mt-3 flex items-center">
+                                <span class="sentiment-positive px-2 py-1 rounded text-xs font-medium mr-2">Positive</span>
+                                <span class="text-sm text-gray-500">24 likes • 3 comments</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-10 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm">
+            <p>Intelligence Report Generated Automatically | Data Refreshed Every Hour</p>
+            <p class="mt-2">© 2023 Public Safety Monitoring Platform</p>
+        </footer>
+    </div>
+</body>
+</html>

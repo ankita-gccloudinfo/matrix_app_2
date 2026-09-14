@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <!-- Per-app branding (title, disclaimer copy) — this file is shared
+    (common/frontend/index.html, symlinked into every app that uses the
+    plain PDF-chat shell) via app-config.js, loaded by each app's own
+    frontend/js/app-config.js (NOT common — that's exactly the per-app
+    delta). Sets window.APP_CONFIG before anything below reads it. -->
+    <script src="/static/js/app-config.js"></script>
+    <script>
+        document.title = (window.APP_CONFIG && window.APP_CONFIG.title) || document.title;
+    </script>
+    <!-- Apply the saved theme before first paint to avoid a flash -->
+    <script>
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
+    </script>
+    <link rel="stylesheet" href="/static/css/variables.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="/static/css/topbar.css">
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <link rel="stylesheet" href="/static/css/history.css">
+    <link rel="stylesheet" href="/static/css/charts.css">
+    <link rel="stylesheet" href="/static/css/settings.css">
+    <link rel="stylesheet" href="/static/css/suggestions.css">
+    <link rel="stylesheet" href="/static/css/related.css">
+    <link rel="stylesheet" href="/static/css/trace.css">
+    <link rel="stylesheet" href="/static/css/avatar-widget.css">
+    <!-- All @media (max-width: 768px/380px) rules for the files above live
+         here instead, so this must stay last to win the cascade. -->
+    <link rel="stylesheet" href="/static/css/mobile.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="/static/js/resizer.js"></script>
+</head>
+
+<body>
+    <!-- PDF Expert Avatar Widget — persistent bottom-right bubble, no full-screen
+         takeover. Talking to it reuses the main search bar (userInput/micBtn)
+         below instead of a dedicated mic — see the avatar module script. -->
+    <div class="avatar-widget" id="avatarWidget">
+        <div class="avatar-widget-panel" id="avatarWidgetPanel">
+            <div class="avatar-widget-header">
+                <select class="avatar-expert-select" id="avatarExpertSelect" hidden></select>
+                <span class="avatar-widget-title" id="avatarWidgetTitle">Avatar</span>
+                <button class="avatar-widget-close" id="avatarWidgetClose" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <video id="avatarVideo" class="avatar-widget-video" autoplay playsinline></video>
+            <div class="avatar-widget-status" id="avatarStatus">Tap the button to connect</div>
+            <div class="avatar-expert-assign" id="avatarExpertAssign" hidden></div>
+        </div>
+        <button class="avatar-widget-bubble" id="avatarWidgetBubble" title="Talk to Avatar">
+            <i data-lucide="user-round"></i>
+        </button>
+    </div>
+
+    <!-- Related Links Panel (auto-opens with topics/links related to the last query) -->
+    <aside class="related-panel" id="relatedPanel">
+        <div class="related-panel-header">
+            <div class="related-panel-title">
+                <i data-lucide="link-2" style="width:18px;height:18px;color:#3b82f6;"></i>
+                <h3>Related Links</h3>
+            </div>
+            <button class="close-related-btn" id="closeRelatedBtn" title="Close">
+                <i data-lucide="x" style="width:18px;height:18px;"></i>
+            </button>
+        </div>
+        <div class="related-list" id="relatedList">
+            <div class="related-panel-empty">Ask a question to see related links.</div>
+        </div>
+    </aside>
+
+    <!-- Agent Workflow Panel — LangGraph live graph trace -->
+    <aside class="trace-panel" id="tracePanel">
+        <div class="trace-panel-header">
+            <div class="trace-panel-title">
+                <div class="trace-logo">🧠</div>
+                <div>
+                    <h3>Agent Workflow</h3>
+                    <p>Live LangGraph execution trace</p>
+                </div>
+            </div>
+            <div class="trace-panel-actions">
+                <button id="refreshTraceBtn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+                <button id="closeTraceBtn" title="Close"><i data-lucide="x"></i></button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="trace-legend">
+            <div class="trace-legend-item"><div class="trace-legend-dot" style="background:#f59e0b"></div>PDF</div>
+        </div>
+
+        <!-- Step counter -->
+        <div class="trace-step-counter" id="traceStepCounter" style="display:none">
+            <span>Click a node to see its I/O</span>
+            <span><strong id="traceStepCount">0</strong> steps</span>
+        </div>
+
+        <!-- Scrollable area -->
+        <div class="trace-list" id="traceList">
+            <div class="trace-panel-empty">Ask a question to see the agent's workflow graph.</div>
+        </div>
+
+        <!-- Detail drawer (shown on node click) -->
+        <div class="trace-detail-drawer" id="traceDetailDrawer">
+            <div class="trace-drawer-header">
+                <div class="trace-drawer-title">
+                    <span id="traceDrawerEmoji">⚙️</span>
+                    <span id="traceDrawerName">Node</span>
+                    <span class="trace-drawer-badge" id="traceDrawerBadge">—</span>
+                </div>
+                <button class="trace-drawer-close" id="traceDrawerClose" title="Close">
+                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                </button>
+            </div>
+            <div class="trace-drawer-body" id="traceDrawerBody"></div>
+        </div>
+    </aside>
+
+    <!-- Shared trace tooltip -->
+    <div class="trace-tooltip" id="traceTooltip"></div>
+
+
+    <!-- Settings Modal -->
+    <div class="settings-modal-overlay" id="settingsModal">
+        <div class="settings-modal">
+            <div class="settings-modal-header">
+                <h3 data-i18n="settingsTitle">Settings</h3>
+                <button class="modal-close-btn" id="closeSettingsBtn">
+                    <i data-lucide="x" style="width:20px;height:20px;"></i>
+                </button>
+            </div>
+            <div class="settings-modal-body">
+                <!-- Language Setting -->
+                <div class="settings-section">
+                    <label class="settings-label" data-i18n="language">Language</label>
+                    <div class="language-options">
+                        <button class="language-btn active" data-lang="en">
+                            <i data-lucide="globe" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="english">English</span>
+                        </button>
+                        <button class="language-btn" data-lang="hi">
+                            <i data-lucide="globe" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="hindi">हिंदी (Hindi)</span>
+                        </button>
+                        <button class="language-btn" data-lang="hinglish">
+                            <i data-lucide="globe" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="hinglish">Hinglish</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Setting -->
+                <div class="settings-section">
+                    <label class="settings-label" data-i18n="theme">Theme</label>
+                    <div class="theme-options">
+                        <button class="theme-btn" data-theme="dark">
+                            <i data-lucide="moon" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="darkMode">Dark Mode</span>
+                        </button>
+                        <button class="theme-btn active" data-theme="light">
+                            <i data-lucide="sun" style="width:18px;height:18px;margin-right:8px;"></i>
+                            <span data-i18n="lightMode">Light Mode</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Two-Way Voice Chat Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">2-Way Chat</label>
+                    <label class="settings-toggle-row" for="twoWayChatToggle">
+                        <span>Hands-free voice conversation — mic listens automatically, sends when you stop speaking, and speaks the reply (using the Avatar if open, or the browser's text-to-speech if closed) and listens again.</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="twoWayChatToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                    <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted, #94a3b8);">Speech Recognition Engine:</span>
+                        <select id="voiceEngineSelect" style="background: rgba(255,255,255,0.08); color: inherit; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 4px 8px; font-size: 13px;">
+                            <option value="browser" selected>Browser Native</option>
+                            <option value="selfhosted">Self-Hosted (Nemotron ASR) — experimental</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Related Links Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">Related Links</label>
+                    <label class="settings-toggle-row" for="relatedLinksToggle">
+                        <span>Show related links panel after each question</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="relatedLinksToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Feedback (Like/Dislike) Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">Feedback</label>
+                    <label class="settings-toggle-row" for="likeDislikeToggle">
+                        <span>Show like/dislike buttons on chat responses (off by default)</span>
+                        <span class="settings-toggle">
+                            <input type="checkbox" id="likeDislikeToggle">
+                            <span class="settings-toggle-slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- PDF Experts Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">PDF Experts</label>
+                    <div id="settingsPdfExpertsEmpty" class="settings-pdf-experts-empty">
+                        Upload PDFs to detect subject experts here.
+                    </div>
+                    <div id="settingsPdfExperts" class="settings-pdf-experts"></div>
+                </div>
+
+                <!-- LiveAvatar API Key Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">LiveAvatar API Key</label>
+                    <input type="password" id="liveAvatarKeyInput" class="settings-text-input"
+                        placeholder="Leave blank to use the server's default key" autocomplete="off">
+                    <div class="settings-hint">
+                        Only used for this tab, for this page load — not saved anywhere,
+                        so it's gone the moment you refresh. Leave blank to keep using
+                        the key already configured on the server.
+                    </div>
+                </div>
+
+                <!-- LiveAvatar Avatar ID Setting -->
+                <div class="settings-section">
+                    <label class="settings-label">LiveAvatar Avatar ID</label>
+                    <input type="text" id="liveAvatarIdInput" class="settings-text-input"
+                        placeholder="Leave blank to use the server's default avatar" autocomplete="off">
+                    <div class="settings-hint">
+                        Which avatar (face) to talk to — overrides both the server's
+                        default and any PDF Expert's assigned avatar. Only used for
+                        this tab, for this page load — not saved anywhere, so it's
+                        gone the moment you refresh.
+                    </div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <span id="settingsSaveStatus" class="settings-save-status"></span>
+                <button class="settings-save-btn" id="saveSettingsBtn">Save to my profile</button>
+                <button class="settings-close-btn" id="closeSettingsBtnFooter" data-i18n="closeModal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile / Login Modal — name-only identification (no password), tied
+         to a MongoDB user profile. Reuses the settings-modal-overlay/-modal
+         classes for visual consistency instead of duplicating that CSS. -->
+    <div class="settings-modal-overlay" id="profileModal">
+        <div class="settings-modal profile-modal">
+            <div class="settings-modal-header">
+                <h3>Profile</h3>
+                <button class="modal-close-btn" id="closeProfileBtn">
+                    <i data-lucide="x" style="width:20px;height:20px;"></i>
+                </button>
+            </div>
+            <div class="settings-modal-body">
+                <!-- Shown when logged out -->
+                <div class="settings-section" id="profileLoggedOutView">
+                    <label class="settings-label">Log in</label>
+                    <div class="settings-hint" style="margin-bottom:10px;">
+                        Enter your name to identify yourself — no password. This
+                        attributes your chat queries in the admin query log and
+                        lets your settings follow you across devices.
+                    </div>
+                    <input type="text" id="profileNameInput" class="settings-text-input" placeholder="Your name" autocomplete="off">
+                    <button class="settings-save-btn" id="profileLoginBtn" style="margin-top:10px;width:100%;">Login</button>
+                </div>
+
+                <!-- Shown when logged in -->
+                <div class="settings-section" id="profileLoggedInView" style="display:none;">
+                    <label class="settings-label">Logged in as</label>
+                    <div class="profile-user-badge">
+                        <span class="profile-user-avatar" id="profileUserAvatar">?</span>
+                        <span id="profileUserName" style="font-weight:600;"></span>
+                        <span id="profileAdminBadge" class="profile-admin-badge" style="display:none;">Admin</span>
+                    </div>
+                    <a href="/query-log" target="_blank" id="profileQueryLogLink" class="settings-save-btn" style="display:none;margin-top:14px;width:100%;text-align:center;text-decoration:none;box-sizing:border-box;">
+                        View Query Log
+                    </a>
+                    <button class="settings-close-btn" id="profileLogoutBtn" style="margin-top:10px;width:100%;">Log out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <aside class="sidebar" id="appSidebar">
+            <div class="top-icons">
+                <button class="icon-btn new-chat-btn" title="New Chat"><i data-lucide="pen-square"></i></button>
+                <button class="icon-btn" id="searchBtn" title="Search"><i data-lucide="search"></i></button>
+                <button class="icon-btn" id="historyBtn" title="Chat History"><i data-lucide="clock"></i></button>
+                <button class="icon-btn" id="traceBtn" title="Agent Workflow"><i data-lucide="workflow"></i></button>
+            </div>
+            <div class="bottom-icons">
+                <button class="icon-btn" id="settingsBtn" title="Settings"><i data-lucide="settings"></i></button>
+                <button class="profile-btn" id="profileBtn" title="Profile / Login">?</button>
+            </div>
+        </aside>
+
+        <aside class="history-panel" id="historyPanel">
+            <div class="history-header">
+                <h3>Chat History</h3>
+                <button class="close-history-btn" id="closeHistoryBtn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <!-- Menu trigger for hamburgerDrawer below — hidden on desktop (that
+                     breakpoint keeps hardRefreshBtn inline via .topbar-actions,
+                     see mobile.css), visible only on narrow viewports. -->
+                <button class="icon-btn hamburger-btn" id="hamburgerBtn" title="Menu">
+                    <i data-lucide="menu"></i>
+                </button>
+                <!-- IDs unchanged from before so the existing click handlers below
+                     (hard refresh) keep working regardless of whether this renders
+                     inline (desktop) or inside the topbarDropdownMenu popover
+                     (mobile, see mobile.css). -->
+                <div class="topbar-actions" id="topbarActions">
+                    <button class="icon-btn" id="hardRefreshBtn" title="Refresh (bypass cache)">
+                        <i data-lucide="refresh-cw"></i>
+                        <span class="topbar-action-label">Refresh</span>
+                    </button>
+                    <button class="icon-btn" id="topbarSettingsBtn" title="Settings">
+                        <i data-lucide="settings"></i>
+                        <span class="topbar-action-label">Settings</span>
+                    </button>
+                </div>
+                <!-- Opens/closes .topbar-actions as a popover on mobile — hidden on
+                     desktop, where .topbar-actions is always inline instead. -->
+                <button class="icon-btn topbar-dropdown-btn" id="topbarDropdownBtn" title="More options">
+                    <i data-lucide="chevron-down"></i>
+                </button>
+            </header>
+
+            <!-- Hamburger Drawer (mobile) — left slide-out panel opened by hamburgerBtn.
+                 Reuses .new-chat-btn on its item so script.js's existing
+                 document.querySelectorAll('.new-chat-btn') binding wires it up for free. -->
+            <div class="hamburger-drawer-overlay" id="hamburgerDrawerOverlay">
+                <aside class="hamburger-drawer" id="hamburgerDrawer">
+                    <div class="hamburger-drawer-header">
+                        <span class="hamburger-drawer-title">Menu</span>
+                        <button class="modal-close-btn" id="closeHamburgerDrawerBtn">
+                            <i data-lucide="x" style="width:20px;height:20px;"></i>
+                        </button>
+                    </div>
+                    <button class="hamburger-drawer-item new-chat-btn">
+                        <i data-lucide="pen-square"></i>
+                        <span>New Chat</span>
+                    </button>
+                    <!-- Inline chat history — #historyBtn (like the rest of
+                         .sidebar) is hidden on mobile, so this is the only
+                         way to reach past chats there. Reuses the desktop
+                         history panel's .history-list/.history-item* classes
+                         (history.css) for identical styling; populated by
+                         script.js's loadHistory() via window.refreshMobileHistoryDrawer,
+                         called each time this drawer opens. -->
+                    <div class="hamburger-drawer-section-label">Recent Chats</div>
+                    <div class="history-list" id="hamburgerHistoryList"></div>
+                </aside>
+            </div>
+
+            <div class="glow-bg" id="glowBg"></div>
+
+            <div class="content-wrapper" id="contentWrapper">
+                <div class="hero-section" id="heroSection">
+                    <!-- Static fallback for the instant before auth.js's
+                         updateGreetingIdentity() runs; that then overwrites
+                         this with the real name/"Welcome to AI Matrix" — see
+                         auth.js. -->
+                    <h1 class="greeting">Welcome to AI Matrix</h1>
+                    <!-- Populated on page load from /api/health-tip (a fresh
+                         vLLM call) — see the healthTipFlow script below.
+                         Hidden until a tip actually arrives. -->
+                    <p class="health-tip" id="healthTip" style="display:none;"></p>
+                    <!-- Populated on page load from /api/suggestions/personalized
+                         (derived from this user's own past questions) — see
+                         loadPersonalizedSuggestions() in script.js. Hidden
+                         until suggestions actually arrive. -->
+                    <div class="suggestion-chips-wrap" id="personalizedSuggestionsWrap" style="display:none;">
+                        <span class="suggestion-chips-label">Suggested for you</span>
+                        <div class="suggestion-chips" id="personalizedSuggestions"></div>
+                    </div>
+                </div>
+
+                <div class="chat-container" id="chatContainer">
+                    <div class="messages" id="messages"></div>
+                </div>
+
+                <div class="input-container" id="inputContainer">
+                    <!-- Typing suggestions (filters as the user types) -->
+                    <div class="suggestions-box" id="suggestionsBox" role="listbox" hidden></div>
+                    <div class="input-box">
+                        <input type="file" id="pdfFileInput" accept="application/pdf" multiple style="display: none;">
+                        <button class="icon-btn add-btn" id="addBtn" title="Upload PDF"><i data-lucide="plus"></i></button>
+                        <textarea id="userInput" placeholder="Ask smart SMI..." autocomplete="off" rows="1"></textarea>
+
+                        <div class="input-actions">
+                            <button class="icon-btn mic-btn" id="micBtn"><i data-lucide="mic"></i></button>
+                            <button class="icon-btn send-btn" id="sendBtn" style="display: none;"><i
+                                    data-lucide="send"></i></button>
+                            <button class="icon-btn stop-btn" id="stopBtn" title="Stop generating" style="display: none;"><i
+                                    data-lucide="square"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/script.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/suggestions.js"></script>
+    <script>
+        lucide.createIcons();
+
+        // Topbar dropdown extra actions (Settings)
+        document.getElementById('topbarSettingsBtn')?.addEventListener('click', () => {
+            window.settingsManager?.open();
+        });
+
+        // Hamburger drawer (mobile top-bar) — left slide-out panel; the
+        // "New Chat" item inside it is wired up for free via script.js's
+        // querySelectorAll('.new-chat-btn'), not here.
+        (function() {
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+            const drawerOverlay = document.getElementById('hamburgerDrawerOverlay');
+            const closeDrawerBtn = document.getElementById('closeHamburgerDrawerBtn');
+
+            function openDrawer() {
+                drawerOverlay?.classList.add('active');
+                // Populate/refresh the inline "Recent Chats" list every time
+                // the drawer opens (script.js, defined inside its own
+                // DOMContentLoaded closure — exposed on window since this
+                // script block runs in a separate scope).
+                window.refreshMobileHistoryDrawer?.();
+            }
+            function closeDrawer() { drawerOverlay?.classList.remove('active'); }
+
+            hamburgerBtn?.addEventListener('click', openDrawer);
+            closeDrawerBtn?.addEventListener('click', closeDrawer);
+            drawerOverlay?.addEventListener('click', (e) => {
+                if (e.target === drawerOverlay) closeDrawer();
+            });
+            // Picking "New Chat" should close the drawer too, not just start
+            // the chat underneath it.
+            drawerOverlay?.querySelectorAll('.hamburger-drawer-item').forEach(item => {
+                item.addEventListener('click', closeDrawer);
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && drawerOverlay?.classList.contains('active')) closeDrawer();
+            });
+        })();
+
+        // Top-bar actions dropdown (mobile) — popover holding
+        // Refresh, toggled by the chevron button.
+        (function() {
+            const dropdownBtn = document.getElementById('topbarDropdownBtn');
+            const actions = document.getElementById('topbarActions');
+
+            function closeDropdown() { actions?.classList.remove('open'); }
+
+            dropdownBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                actions?.classList.toggle('open');
+            });
+            actions?.querySelectorAll('.icon-btn').forEach(btn => {
+                btn.addEventListener('click', closeDropdown);
+            });
+            document.addEventListener('click', (e) => {
+                if (actions?.classList.contains('open') && !actions.contains(e.target) && e.target !== dropdownBtn) {
+                    closeDropdown();
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeDropdown();
+            });
+        })();
+
+        // Hard-refresh button — a normal location.reload() lets the browser
+        // serve conditional (304) cached copies of /static/* assets, which
+        // is correct but means an edited file won't visibly update until a
+        // manual hard-refresh (Cmd/Ctrl+Shift+R). This re-fetches every
+        // stylesheet/script the page currently has loaded with `cache:
+        // 'no-store'` (skips the HTTP cache entirely, no conditional
+        // request) so they're guaranteed fresh, then reloads.
+        (function() {
+            const hardRefreshBtn = document.getElementById('hardRefreshBtn');
+            hardRefreshBtn?.addEventListener('click', async () => {
+                hardRefreshBtn.disabled = true;
+                hardRefreshBtn.classList.add('spinning');
+                const urls = [...document.querySelectorAll('link[rel="stylesheet"][href], script[src]')]
+                    .map(el => el.href || el.src)
+                    .filter(Boolean);
+                await Promise.all(urls.map(url => fetch(url, { cache: 'no-store' }).catch(() => {})));
+                window.location.reload();
+            });
+        })();
+
+        // Health tip — one fresh vLLM call on first page load, shown under
+        // the hero greeting (replaces the old Monitor Report panel's slot).
+        (function() {
+            const healthTipEl = document.getElementById('healthTip');
+            if (!healthTipEl) return;
+
+            fetch('/api/health-tip')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.tip) {
+                        healthTipEl.textContent = data.tip;
+                        healthTipEl.style.display = 'block';
+                    }
+                })
+                .catch(e => console.error('Failed to load health tip:', e));
+        })();
+
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- LiveAvatar integration: main search bar (text or mic) -> /api/chat -->
+    <!-- (your own LLM) -> avatar speaks. Persistent bottom-right widget,   -->
+    <!-- not a modal. When multiple PDF "experts" exist (see               -->
+    <!-- /api/pdf-experts), a switcher lets you pick which one is active — -->
+    <!-- each has its own avatar_id (face) and PDF scope.                  -->
+    <!-- Confirmed real SDK methods (from live console inspection):        -->
+    <!-- start, stop, keepAlive, attach, message, repeat, repeatAudio,     -->
+    <!-- startListening, stopListening, interrupt                         -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <script type="module">
+        import { LiveAvatarSession, SessionEvent } from "https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk/+esm";
+
+        let session = null;
+        let experts = [];          // [{name, filenames, avatar_id}]
+        let activeExpert = null;   // currently selected entry from `experts`, or null (default avatar)
+        let avatarCatalog = null;  // cached /api/avatar-catalog result
+        let widgetOpen = false;
+
+        const widget = document.getElementById('avatarWidget');
+        const bubble = document.getElementById('avatarWidgetBubble');
+        const panel = document.getElementById('avatarWidgetPanel');
+        const closeBtn = document.getElementById('avatarWidgetClose');
+        const avatarVideo = document.getElementById('avatarVideo');
+        const avatarStatus = document.getElementById('avatarStatus');
+        const titleEl = document.getElementById('avatarWidgetTitle');
+        const expertSelect = document.getElementById('avatarExpertSelect');
+        const assignBox = document.getElementById('avatarExpertAssign');
+        const chatContainerEl = document.getElementById('chatContainer');
+        const contentWrapperEl = document.getElementById('contentWrapper');
+
+        // window.liveAvatarApiKeyOverride is set by the Settings panel
+        // (settings.js) — in-memory only, never persisted, so a page refresh
+        // always reverts to the server's .env LIVEAVATAR_API_KEY.
+        function liveAvatarHeaders(extra) {
+            const headers = { ...extra };
+            if (window.liveAvatarApiKeyOverride) {
+                headers['X-LiveAvatar-Key'] = window.liveAvatarApiKeyOverride;
+            }
+            return headers;
+        }
+
+        // ── Step 1+2+3: fetch token, start session, attach video ──
+        async function startAvatarSession(avatarId) {
+            // Trial accounts allow only 1 concurrent session. Always fully
+            // tear down any existing session first, or the new session.start()
+            // call will fail with "Session concurrency limit reached".
+            if (session) {
+                await stopAvatarSession();
+            }
+
+            avatarStatus.textContent = "Connecting to avatar...";
+
+            // window.liveAvatarIdOverride (Settings > LiveAvatar Avatar ID) wins
+            // over the caller's avatarId (e.g. a PDF Expert's assigned face),
+            // which itself wins over the server's default AVATAR_ID.
+            const effectiveAvatarId = window.liveAvatarIdOverride || avatarId;
+
+            const tokenRes = await fetch('/api/avatar-token', {
+                method: 'POST',
+                headers: liveAvatarHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(effectiveAvatarId ? { avatar_id: effectiveAvatarId } : {})
+            });
+            const tokenData = await tokenRes.json();
+
+            if (!tokenData.token) {
+                avatarStatus.textContent = "Error: could not get avatar token.";
+                console.error('Token fetch failed:', tokenData);
+                return;
+            }
+
+            session = new LiveAvatarSession(tokenData.token, { voiceChat: false });
+            const thisSession = session; // pin this instance — `session` may get reassigned (e.g. switching experts) before the event below fires
+
+            // session.attach() silently no-ops if the remote video/audio tracks
+            // haven't been subscribed yet — calling it right after start()
+            // races that subscription and can leave the video permanently
+            // black. SESSION_STREAM_READY fires once both tracks are actually
+            // available, so attach only then.
+            thisSession.on(SessionEvent.SESSION_STREAM_READY, () => {
+                if (session !== thisSession) return; // superseded by a newer session
+                try {
+                    thisSession.attach(avatarVideo);
+                    avatarStatus.textContent = "Avatar ready — type or speak in the search bar below.";
+                } catch (e) {
+                    console.error('session.attach() failed:', e);
+                    avatarStatus.textContent = "Connected, but video failed to attach.";
+                }
+            });
+
+            try {
+                await session.start();
+            } catch (e) {
+                console.error('session.start() failed:', e);
+                avatarStatus.textContent = "Error starting avatar session.";
+                session = null;
+                return;
+            }
+
+            avatarStatus.textContent = "Connected — waiting for video stream...";
+        }
+
+        async function stopAvatarSession() {
+            if (session) {
+                try {
+                    await session.stop();
+                } catch (e) {
+                    // "Session not found" / already-stopped errors are expected
+                    // if the server already tore it down (e.g. MAX_DURATION_REACHED)
+                    console.warn('stop() failed (likely already stopped):', e.message || e);
+                }
+                session = null;
+            }
+            if (avatarVideo.srcObject) {
+                avatarVideo.srcObject.getTracks().forEach(t => t.stop());
+                avatarVideo.srcObject = null;
+            }
+        }
+
+        // ── The confirmed real "make it speak" call ───────────────
+        // session.repeat(text) makes the avatar speak the exact text
+        // verbatim, bypassing HeyGen's own LLM — exactly what we want
+        // since the final answer already comes from your own LLM.
+        async function speakOnSession(text) {
+            if (!session) throw new Error("No active session");
+            try {
+                // repeat() doesn't replace in-flight/queued speech on its own —
+                // without this, sending a second message while the avatar is
+                // still speaking the first answer just queues the new one
+                // behind it instead of switching to it immediately.
+                try { session.interrupt(); } catch (e) { /* nothing to interrupt yet — fine */ }
+                return await session.repeat(text);
+            } catch (e) {
+                const msg = String(e.message || e);
+                if (msg.includes('not connected') || msg.includes('Session not found')) {
+                    console.warn('[LiveAvatar] Session dropped (likely hit the trial 2-minute cap). Reconnecting once...');
+                    await startAvatarSession(activeExpert?.avatar_id);
+                    if (!session) throw new Error('Reconnect failed');
+                    return await session.repeat(text);
+                }
+                throw e;
+            }
+        }
+
+        // Exposed to script.js: the main search bar's sendMessage() calls this
+        // with the final answer text once streaming finishes, so typing (or
+        // the existing mic button) drives the avatar exactly like speaking to
+        // the old modal's dedicated mic used to.
+        window.avatarSpeakIfActive = async function (text) {
+            if (!widgetOpen || !session || !text) return;
+            avatarStatus.textContent = "Speaking...";
+            try {
+                await speakOnSession(text);
+                avatarStatus.textContent = "Avatar ready — type or speak in the search bar below.";
+            } catch (e) {
+                console.error('avatarSpeakIfActive failed:', e);
+                avatarStatus.textContent = "Error speaking the response.";
+            }
+        };
+
+        // Exposed to script.js: scopes /api/chat's PDF retrieval to only the
+        // active expert's file(s) — unless that expert's scope_mode is "all",
+        // in which case it deliberately searches every PDF uploaded this
+        // session (set per-expert in Settings > PDF Experts).
+        window.getActivePdfScope = function () {
+            if (!widgetOpen || !activeExpert) return null;
+            if (activeExpert.scope_mode === 'all') return null;
+            return activeExpert.filenames;
+        };
+
+        // Exposed to script.js: tells the backend which expert persona to
+        // answer as (see pdf_answer_node), so identity questions ("which
+        // expert are you") get a real answer instead of the generic
+        // assistant framing — independent of scope_mode/pdf_scope above.
+        window.getActiveExpertName = function () {
+            return (widgetOpen && activeExpert) ? activeExpert.name : null;
+        };
+
+        // ── PDF experts: load, render switcher, render avatar-assignment UI ──
+        async function loadAvatarCatalog() {
+            if (avatarCatalog) return avatarCatalog;
+            try {
+                const res = await fetch('/api/avatar-catalog', { headers: liveAvatarHeaders() });
+                const data = await res.json();
+                // Real shape from LiveAvatar: {code, data: {results: [{id, name, ...}]}}
+                avatarCatalog = data?.data?.results || (Array.isArray(data) ? data : []);
+            } catch (e) {
+                console.error('Failed to load avatar catalog:', e);
+                avatarCatalog = [];
+            }
+            return avatarCatalog;
+        }
+
+        async function assignAvatar(expertName, avatarId) {
+            try {
+                await fetch('/api/pdf-experts/assign-avatar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: expertName, avatar_id: avatarId })
+                });
+            } catch (e) {
+                console.error('Failed to assign avatar:', e);
+            }
+            const expert = experts.find(e => e.name === expertName);
+            if (expert) expert.avatar_id = avatarId;
+            renderExperts();
+        }
+
+        function renderExperts() {
+            // Switcher: only useful with more than one expert
+            if (experts.length > 1) {
+                expertSelect.hidden = false;
+                expertSelect.innerHTML = experts.map(e =>
+                    `<option value="${e.name}" ${activeExpert?.name === e.name ? 'selected' : ''}>${e.name}</option>`
+                ).join('');
+            } else {
+                expertSelect.hidden = true;
+            }
+
+            titleEl.textContent = activeExpert ? activeExpert.name : 'Avatar';
+
+            const unassigned = experts.filter(e => !e.avatar_id);
+            if (unassigned.length === 0) {
+                assignBox.hidden = true;
+                assignBox.innerHTML = '';
+                return;
+            }
+
+            assignBox.hidden = false;
+            loadAvatarCatalog().then(catalog => {
+                const options = catalog.map(a =>
+                    `<option value="${a.id}">${a.name || a.id}</option>`
+                ).join('');
+                assignBox.innerHTML = `<div class="avatar-expert-assign-title">Assign a face per expert</div>` +
+                    unassigned.map(e => `
+                        <div class="avatar-expert-assign-row">
+                            <span class="avatar-expert-assign-name">${e.name}</span>
+                            <select data-expert="${e.name}">
+                                <option value="">Choose avatar…</option>
+                                ${options}
+                            </select>
+                        </div>
+                    `).join('');
+
+                assignBox.querySelectorAll('select[data-expert]').forEach(sel => {
+                    sel.addEventListener('change', () => {
+                        if (sel.value) assignAvatar(sel.dataset.expert, sel.value);
+                    });
+                });
+            });
+        }
+
+        async function loadExperts() {
+            try {
+                const res = await fetch('/api/pdf-experts');
+                const data = await res.json();
+                experts = data.experts || [];
+            } catch (e) {
+                console.error('Failed to load PDF experts:', e);
+                experts = [];
+            }
+            // Re-point activeExpert at the freshly fetched object (by name),
+            // not the stale one — otherwise an avatar_id/scope_mode edit made
+            // elsewhere (e.g. Settings) would never reach the active session.
+            activeExpert = (activeExpert && experts.find(e => e.name === activeExpert.name)) || experts[0] || null;
+            renderExperts();
+        }
+
+        // Exposed to the Settings panel: re-syncs this module's expert list
+        // (avatar_id / scope_mode) after an edit made there, without
+        // re-running the (LLM) clustering step.
+        window.refreshPdfExperts = loadExperts;
+
+        // Exposed to script.js: called once a PDF upload batch finishes, so
+        // newly uploaded PDFs get clustered into subject experts right away.
+        window.rebuildPdfExperts = async function () {
+            try {
+                await fetch('/api/pdf-experts/build', { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to build PDF experts:', e);
+            }
+            await loadExperts();
+        };
+
+        expertSelect?.addEventListener('change', async () => {
+            const expert = experts.find(e => e.name === expertSelect.value);
+            if (!expert) return;
+            activeExpert = expert;
+            renderExperts();
+            if (widgetOpen) await startAvatarSession(expert.avatar_id);
+        });
+
+        // ── Widget open/close (persistent bubble, not a full-screen modal) ──
+        // Opening docks the panel into the main #chatContainer (filling it,
+        // like an active chat) instead of leaving it as a small floating
+        // popup — the panel DOM node is moved out of #avatarWidget and back
+        // again on close, since the floating-vs-docked CSS is keyed off the
+        // panel's own .docked class, not its ancestor.
+        function dockPanel() {
+            if (!panel || !chatContainerEl) return;
+            if (contentWrapperEl && !contentWrapperEl.classList.contains('chat-active')) {
+                contentWrapperEl.classList.add('chat-active');
+            }
+            chatContainerEl.classList.add('avatar-docked');
+            chatContainerEl.appendChild(panel);
+            panel.classList.add('docked');
+        }
+
+        function undockPanel() {
+            if (!panel || !panel.classList.contains('docked')) return;
+            panel.classList.remove('docked');
+            chatContainerEl?.classList.remove('avatar-docked');
+            // Restore the panel as the bubble's sibling inside #avatarWidget,
+            // ahead of the bubble, matching the original markup order.
+            widget.insertBefore(panel, bubble);
+        }
+
+        async function openWidget() {
+            widgetOpen = true;
+            widget.classList.add('open');
+            dockPanel();
+            await loadExperts();
+            await startAvatarSession(activeExpert?.avatar_id);
+        }
+
+        async function closeWidget() {
+            widgetOpen = false;
+            widget.classList.remove('open');
+            undockPanel();
+            await stopAvatarSession();
+        }
+
+        // Exposed to script.js so it can decide, when a response finishes,
+        // whether the avatar will speak it (skip the browser TTS fallback
+        // used for hands-free two-way mode) — see setTwoWayChatEnabled.
+        window.isAvatarWidgetOpen = () => widgetOpen;
+
+        // Exposed to script.js for barge-in: called the instant the mic
+        // hears the user start talking over the avatar's current reply, so
+        // it can be cut off immediately instead of finishing first.
+        window.avatarInterruptIfActive = function () {
+            if (!widgetOpen || !session) return;
+            try { session.interrupt(); } catch (e) { /* nothing to interrupt — fine */ }
+        };
+
+        bubble?.addEventListener('click', () => {
+            widgetOpen ? closeWidget() : openWidget();
+        });
+        closeBtn?.addEventListener('click', closeWidget);
+
+        // Best-effort: pick up any experts already built from an earlier
+        // upload in this session (e.g. page reload) without opening the widget.
+        loadExperts();
+
+        // Auto-open avatar widget if navigated from "Chat with Avatar" button
+        if (new URLSearchParams(window.location.search).get('openAvatar') === 'true') {
+            setTimeout(() => {
+                if (bubble) bubble.click();
+            }, 300);
+        }
+    </script>
+    <!-- Disclaimer Modal — title/body text set at runtime from
+    window.APP_CONFIG.disclaimerTitle/disclaimerHtml (see app-config.js and
+    the script below); falls back to a generic AI disclaimer if an app
+    doesn't supply one. -->
+    <div class="settings-modal-overlay" id="medicalDisclaimerModal" style="display: none; z-index: 9999; background-color: rgba(0,0,0,0.8);">
+        <div class="settings-modal" style="max-width: 500px; text-align: center;">
+            <div class="settings-modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 0;">
+                <i data-lucide="alert-triangle" style="width: 48px; height: 48px; color: #f59e0b; margin-bottom: 10px;"></i>
+            </div>
+            <div class="settings-modal-body" style="padding: 20px;">
+                <h2 id="disclaimerTitle" style="margin-top: 0; color: var(--text);">AI Disclaimer</h2>
+                <div id="disclaimerBody" style="color: var(--text-muted); line-height: 1.5; margin-bottom: 30px;">
+                    <p>This application is an AI-powered assistant for informational purposes only. Responses may be incomplete or inaccurate — verify anything important before relying on it.</p>
+                </div>
+                <button id="acceptDisclaimerBtn" class="hero-btn" style="width: 100%; justify-content: center;">
+                    I Understand & Agree
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function() {
+            const cfg = window.APP_CONFIG || {};
+            if (cfg.disclaimerTitle) document.getElementById('disclaimerTitle').textContent = cfg.disclaimerTitle;
+            if (cfg.disclaimerHtml) document.getElementById('disclaimerBody').innerHTML = cfg.disclaimerHtml;
+        })();
+    </script>
+</body>
+</html>

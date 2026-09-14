@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Intelligence Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        secondary: '#0d9488',
+                        accent: '#7c3aed',
+                        light: '#f8fafc',
+                        dark: '#0f172a'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+        }
+        .gradient-header {
+            background: linear-gradient(90deg, #4f46e5, #0d9488);
+        }
+        .kpi-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        }
+        .chart-container {
+            height: 200px;
+        }
+        .sentiment-positive {
+            color: #10b981;
+        }
+        .sentiment-negative {
+            color: #ef4444;
+        }
+        .sentiment-neutral {
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Header Banner -->
+    <div class="gradient-header text-white py-6 px-8">
+        <div class="container mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold">Social Media Intelligence Report</h1>
+                    <p class="mt-1 opacity-90">Real-time monitoring & analysis dashboard</p>
+                </div>
+                <div class="mt-4 md:mt-0 text-right">
+                    <div class="text-sm opacity-90">Report Period</div>
+                    <div class="font-semibold">June 1-30, 2023</div>
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-sm opacity-80">Total Posts</div>
+                    <div class="text-2xl font-bold">1,284</div>
+                    <div class="flex items-center mt-1 text-xs">
+                        <span class="text-green-400">↑ 12%</span>
+                        <span class="ml-1">vs last month</span>
+                    </div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-sm opacity-80">Top District</div>
+                    <div class="text-2xl font-bold">Downtown</div>
+                    <div class="flex items-center mt-1 text-xs">
+                        <span class="text-red-400">↓ 5%</span>
+                        <span class="ml-1">vs last week</span>
+                    </div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-sm opacity-80">Alert Level</div>
+                    <div class="text-2xl font-bold text-yellow-300">Moderate</div>
+                    <div class="flex items-center mt-1 text-xs">
+                        <span class="text-green-400">↑ 2</span>
+                        <span class="ml-1">from yesterday</span>
+                    </div>
+                </div>
+                <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div class="text-sm opacity-80">Active Topics</div>
+                    <div class="text-2xl font-bold">18</div>
+                    <div class="flex items-center mt-1 text-xs">
+                        <span class="text-green-400">↑ 3</span>
+                        <span class="ml-1">new this week</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Sentiment Analysis -->
+        <div class="mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-chart-pie mr-2 text-primary"></i> Sentiment Analysis
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="card bg-white p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-gray-500 text-sm font-medium">Sentiment Distribution</h3>
+                            <div class="text-3xl font-bold mt-1">1,284</div>
+                        </div>
+                        <div class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">+12%</div>
+                    </div>
+                    <div class="mt-4 space-y-3">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="sentiment-positive font-medium">Positive</span>
+                                <span>42%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 42%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="sentiment-neutral font-medium">Neutral</span>
+                                <span>35%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-gray-400 h-2 rounded-full" style="width: 35%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="sentiment-negative font-medium">Negative</span>
+                                <span>23%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-red-500 h-2 rounded-full" style="width: 23%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bg-white p-6 md:col-span-2">
+                    <h3 class="text-gray-500 text-sm font-medium mb-4">Volume Trend Over Time</h3>
+                    <div class="chart-container flex items-end justify-between h-48">
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Mon</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 40px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Tue</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 80px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Wed</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 120px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Thu</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 100px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Fri</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 150px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Sat</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 130px;"></div>
+                        </div>
+                        <div class="flex flex-col items-center w-10">
+                            <div class="text-xs text-gray-500">Sun</div>
+                            <div class="w-8 bg-primary rounded-t" style="height: 90px;"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-center mt-2 text-xs text-gray-500">
+                        <span class="mr-4">Week 1</span>
+                        <span class="mr-4">Week 2</span>
+                        <span class="mr-4">Week 3</span>
+                        <span>Week 4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Platform Comparison -->
+        <div class="mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-globe mr-2 text-secondary"></i> Platform Comparison
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card bg-white p-6">
+                    <h3 class="text-gray-500 text-sm font-medium mb-4">Posts by Platform</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                                <span>Twitter/X</span>
+                            </div>
+                            <div class="font-semibold">42%</div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-pink-500 mr-2"></div>
+                                <span>Instagram</span>
+                            </div>
+                            <div class="font-semibold">28%</div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-blue-400 mr-2"></div>
+                                <span>Facebook</span>
+                            </div>
+                            <div class="font-semibold">15%</div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                                <span>YouTube</span>
+                            </div>
+                            <div class="font-semibold">8%</div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                                <span>WhatsApp</span>
+                            </div>
+                            <div class="font-semibold">7%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card bg-white p-6">
+                    <h3 class="text-gray-500 text-sm font-medium mb-4">Engagement Metrics</h3>
+                    <div class="flex justify-between">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-primary">12.4K</div>
+                            <div class="text-xs text-gray-500">Likes</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-primary">3.2K</div>
+                            <div class="text-xs text-gray-500">Comments</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-primary">1.8K</div>
+                            <div class="text-xs text-gray-500">Shares</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-primary">24.7K</div>
+                            <div class="text-xs text-gray-500">Views</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-blue-500 to-teal-500" style="width: 75%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keywords and Post Cards -->
+        <div class="mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-tags mr-2 text-accent"></i> Key Topics & Recent Posts
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1">
+                    <div class="card bg-white p-6">
+                        <h3 class="text-gray-500 text-sm font-medium mb-3">Popular Keywords</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full">crime</span>
+                            <span class="bg-purple-100 text-purple-800 text-xs px-3 py-1 rounded-full">security</span>
+                            <span class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full">public safety</span>
+                            <span class="bg-yellow-100 text-yellow-800 text-xs px-3 py-1 rounded-full">emergency</span>
+                            <span class="bg-pink-100 text-pink-800 text-xs px-3 py-1 rounded-full">community</span>
+                            <span class="bg-indigo-100 text-indigo-800 text-xs px-3 py-1 rounded-full">events</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-white p-6 mt-6">
+                        <h3 class="text-gray-500 text-sm font-medium mb-3">Top Districts</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium">Downtown</span>
+                                <span class="text-sm bg-red-100 text-red-800 px-2 py-1 rounded-full">42 posts</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium">Westside</span>
+                                <span class="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">31 posts</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium">North Park</span>
+                                <span class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full">27 posts</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium">East End</span>
+                                <span class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">18 posts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="lg:col-span-2">
+                    <div class="card bg-white p-6">
+                        <h3 class="text-gray-500 text-sm font-medium mb-4">Recent Posts</h3>
+                        <div class="space-y-4">
+                            <!-- Post Card 1 -->
+                            <div class="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                                <div class="flex justify-between">
+                                    <div class="flex items-center">
+                                        <div class="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
+                                        <div class="ml-3">
+                                            <div class="font-medium">Sarah J.</div>
+                                            <div class="text-xs text-gray-500">Twitter/X • 2 hours ago</div>
+                                        </div>
+                                    </div>
+                                    <span class="sentiment-negative font-medium text-sm">Negative</span>
+                                </div>
+                                <p class="mt-2 text-gray-700">Just witnessed suspicious activity near the downtown plaza. Security needs to be increased immediately.</p>
+                                <div class="mt-2 flex items-center">
+                                    <span class="text-xs text-gray-500">#suspiciousactivity #downtown #safety</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Post Card 2 -->
+                            <div class="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                                <div class="flex justify-between">
+                                    <div class="flex items-center">
+                                        <div class="bg-gray-200 border-2 border-dashed rounded-xl w-10 h-10" />
+                                        <div class="ml-3">
+                                            <div class="font-medium">Mike T.</div>
+                                            <div class="text-xs text-gray-500">Instagram • 4 hours ago</div>
+                                        </div>
+                                    </div>
+                                    <span class="sentiment-positive font-medium text-sm">Positive</span>
+                                </div>
+                                <p class="mt-2 text-gray-700">Great job by the local police team during today's community outreach event. Community spirit is strong!</p>
+                                <div class="mt-2 flex items-center">
+                                    <span class="text-xs text-gray-500">#communityoutreach #police #safety</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Metrics -->
+        <div class="mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-chart-bar mr-2 text-primary"></i> Additional Metrics
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="card kpi-card p-6">
+                    <div class="text-gray-500 text-sm">Volume Anomalies</div>
+                    <div class="text-2xl font-bold mt-1">12</div>
+                    <div class="flex items-center mt-2">
+                        <span class="text-red-500 text-sm">High Alert</span>
+                        <span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">↑ 3</span>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card p-6">
+                    <div class="text-gray-500 text-sm">Early Warning Signals</div>
+                    <div class="text-2xl font-bold mt-1">8</div>
+                    <div class="flex items-center mt-2">
+                        <span class="text-yellow-500 text-sm">Moderate</span>
+                        <span class="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">↑ 1</span>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card p-6">
+                    <div class="text-gray-500 text-sm">Categorical Alerts</div>
+                    <div class="text-2xl font-bold mt-1">5</div>
+                    <div class="flex items-center mt-2">
+                        <span class="text-green-500 text-sm">Low</span>
+                        <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">↓ 2</span>
+                    </div>
+                </div>
+                
+                <div class="card kpi-card p-6">
+                    <div class="text-gray-500 text-sm">Demographic Shifts</div>
+                    <div class="text-2xl font-bold mt-1">3</div>
+                    <div class="flex items-center mt-2">
+                        <span class="text-blue-500 text-sm">Medium</span>
+                        <span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">→</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Social Media Intelligence Report | Generated: June 30, 2023 | Confidential</p>
+        </div>
+    </footer>
+</body>
+</html>

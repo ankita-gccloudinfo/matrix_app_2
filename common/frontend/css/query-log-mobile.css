@@ -1,0 +1,115 @@
+/* Query Log — Mobile
+   The table has no natural narrow layout (6 columns, two of them free-text),
+   so below 768px each row becomes a stacked card instead of a horizontally
+   scrolling table. td[data-label] cells grow a label above their value via
+   ::before; see the data-label attributes added in query-log.html's render. */
+
+@media screen and (max-width: 768px) {
+    #topbar {
+        padding: 14px 16px;
+        gap: 10px;
+    }
+
+    #topbar h1 { font-size: 16px; }
+    #topbar .subtitle { font-size: 11.5px; }
+    .topbar-titles { min-width: 100%; }
+
+    #searchInput {
+        min-width: 0;
+        flex: 1 1 auto;
+        width: 100%;
+    }
+
+    #refreshBtn {
+        width: 100%;
+    }
+
+    #statsRow {
+        padding: 14px 16px 2px;
+        gap: 10px;
+    }
+
+    .stat-card {
+        flex: 1 1 calc(50% - 5px);
+        min-width: 0;
+        padding: 10px 14px;
+    }
+
+    #content {
+        padding: 14px 12px 32px;
+    }
+
+    /* ── Table -> stacked cards ── */
+    #logTable {
+        border-spacing: 0 12px;
+        background: transparent;
+        border: none;
+    }
+
+    #logTable thead { display: none; }
+
+    #logTable tbody, #logTable { display: block; width: 100%; }
+
+    tr.main-row {
+        display: block;
+        background: var(--ql-panel);
+        border: 1px solid var(--ql-border);
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(15,23,42,.03);
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+
+    tbody tr.main-row:nth-child(4n+1) td { background: transparent; }
+
+    tr.main-row td {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--ql-border);
+        max-width: none;
+    }
+
+    tr.main-row td:last-child { border-bottom: none; }
+
+    td.user-cell {
+        background: #fbfcfe;
+        padding: 12px 14px;
+    }
+
+    td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: var(--ql-subtext);
+        margin-bottom: 4px;
+    }
+
+    td.rows-cell { text-align: left; }
+    td.rows-cell::before { display: inline-block; margin: 0 8px 0 0; }
+    td.rows-cell .rows-badge { vertical-align: middle; }
+
+    td.query-cell, td.answer-cell { max-width: none; }
+
+    /* Trace detail sits as its own card directly under the main-row card */
+    tr.trace-row.collapsed { display: none; }
+    tr.trace-row:not(.collapsed) {
+        display: block;
+        margin: -10px 0 10px;
+        border-radius: 0 0 14px 14px;
+        overflow: hidden;
+    }
+    tr.trace-row td { padding: 14px; }
+
+    .trace-toggle-btn { width: 100%; justify-content: center; padding: 9px 12px; }
+
+    .trace-field-value { max-height: 140px; }
+}
+
+@media screen and (max-width: 380px) {
+    .stat-card { flex: 1 1 100%; }
+    #topbar h1 { font-size: 15px; }
+}

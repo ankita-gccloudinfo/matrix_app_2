@@ -1,0 +1,51 @@
+# adhoc_report_sidecar/docker-compose.yml
+#
+#  hosts the abi/screenshot-to-code BACKEND ONLY
+# (its Vite frontend is skipped; report-builder.html is our UI).
+#
+# This directory is a SIBLING of matrix_app/, not a subdirectory of it —
+# same placement pattern dynamic_report_service.py already assumes for
+# dynamic_report_maker/ (see WORKSPACE_ROOT = MATRIX_APP_DIR.parent).
+#
+#   your-workspace-root/
+#     matrix_app/                  <- existing app, UNTOUCHED in Phase 0
+#     dynamic_report_maker/        <- existing sibling dir
+#     adhoc_report_sidecar/        <- NEW, this file lives here
+#       docker-compose.yml
+#       .env
+#       screenshot-to-code/        <- git clone of abi/screenshot-to-code goes here (see README.md)
+#
+# Bound to 127.0.0.1 only — reachable from matrix_app on the same host,
+# never exposed publicly. No public port, no ingress rule (per plan.md
+# Phase 0: "internal-only Docker service").
+
+services:
+  adhoc-html-backend:
+    build:
+      context: ./screenshot-to-code/backend
+      dockerfile: Dockerfile
+    container_name: adhoc_report_sidecar_backend
+    restart: unless-stopped
+    command: poetry run uvicorn main:app --host 0.0.0.0 --port 7001
+    env_file:
+      - .env
+    environment:
+      # screenshot-to-code reads these as its "OpenAI" provider config.
+      # Pointed at the SAME vLLM endpoint dynamic_report_service.py already
+      # calls (VLLM_BASE_URL / VLLM_API_KEY in matrix_app/.env) — no paid
+      # key, no data leaving this host.
+      - OPENAI_BASE_URL=${ADHOC_VLLM_BASE_URL}
+      - OPENAI_API_KEY=${ADHOC_VLLM_API_KEY}
+      - MOCK=false
+    volumes:
+      - ./screenshot-to-code/backend:/app
+    ports:
+      # host-loopback-only binding: matrix_app on this same host can reach
+      # 127.0.0.1:7001, nothing outside the host can.
+      - "127.0.0.1:7001:7001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7001/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

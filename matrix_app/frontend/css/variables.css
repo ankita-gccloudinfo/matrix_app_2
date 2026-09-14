@@ -1,0 +1,50 @@
+:root {
+    /* Theme-independent tokens */
+    --blue-accent: #3b82f6;
+    --blue-glow: rgba(59, 130, 246, 0.15);
+    --sidebar-width: 64px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --tab-bar-height: 64px;
+
+    /* Light palette (default) */
+    --bg-color: #ffffff;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --hover-bg: #f3f4f6;
+}
+
+/* Explicit light theme (same as default) */
+:root[data-theme="light"] {
+    --bg-color: #ffffff;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --hover-bg: #f3f4f6;
+}
+
+/* Dark theme — driven by the Settings > Theme toggle (settings.js sets
+   data-theme on <html>). Only the core color tokens are overridden here so
+   every surface that uses var(--…) switches together. */
+:root[data-theme="dark"] {
+    --bg-color: #0f172a;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.10);
+    --hover-bg: rgba(255, 255, 255, 0.06);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}

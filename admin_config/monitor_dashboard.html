@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MATRIX VM Monitor - Enhanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    body {
+        background: #ffffff;
+        color: #111827;
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(239, 241, 238, 0.08);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgb(235, 233, 233);
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+    }
+
+    .status-ok {
+        background: #10b981;
+    }
+
+    .status-warning {
+        background: #f59e0b;
+    }
+
+    .status-critical {
+        background: #ef4444;
+    }
+
+    .metric-card {
+        transition: all 0.3s ease;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        border-color: #3b82f6;
+        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    }
+
+    .time-range-btn.active {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    .time-range-btn {
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+    }
+
+    .alert-item {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .loading-spinner {
+        border: 3px solid #dbeafe;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        background: #d1d5db;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .toggle-switch.active {
+        background: #3b82f6;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        background: white;
+        border-radius: 50%;
+        top: 3px;
+        left: 3px;
+        transition: transform 0.3s;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    .toggle-switch.active::after {
+        transform: translateX(20px);
+    }
+
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f3f4f6;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #93c5fd;
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #60a5fa;
+    }
+
+    /* Mobile specific tweaks */
+    @media (max-width: 768px) {
+        .time-range-btn {
+            padding: 6px 10px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .metric-card .text-4xl {
+            font-size: 1.5rem !important;
+        }
+        .chart-container {
+            height: 200px !important;
+        }
+    }
+</style>
+</head>
+<body class="min-h-screen p-2 md:p-4">
+<!-- Header -->
+<div class="max-w-[1920px] mx-auto mb-4 md:mb-6">
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="w-full">
+                <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent break-words">
+                    🖥️ MATRIX VM Monitor
+                </h1>
+                <p class="text-gray-400 text-xs md:text-sm mt-1">Real-time system metrics with 7-day SQLite storage</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto">
+                <div id="connectionStatus" class="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 rounded-lg glass-card flex-1 md:flex-none justify-center">
+                    <div class="status-dot status-critical"></div>
+                    <span class="text-xs md:text-sm">Connecting...</span>
+                </div>
+
+                <div id="dbStats" class="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 rounded-lg glass-card flex-1 md:flex-none justify-center">
+                    <span class="text-xs md:text-sm text-gray-400">DB: <span id="recordCount">--</span></span>
+                </div>
+
+                <button onclick="toggleSettings()" class="px-3 py-2 md:px-4 md:py-2 rounded-lg btn-primary text-white text-xs md:text-sm font-medium flex-1 md:flex-none">
+                    ⚙️ Settings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Panel (Hidden by default) -->
+<div id="settingsPanel" class="max-w-[1920px] mx-auto mb-4 md:mb-6 hidden">
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <h2 class="text-lg md:text-xl font-bold mb-4">⚙️ Settings</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            <!-- Auto-refresh -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium">Auto-refresh</label>
+                    <p class="text-xs text-gray-400">Update metrics every 2s</p>
+                </div>
+                <div class="toggle-switch active" onclick="toggleAutoRefresh(this)"></div>
+            </div>
+
+            <!-- Show Alerts -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium">Show Alerts</label>
+                    <p class="text-xs text-gray-400">Display alert notifications</p>
+                </div>
+                <div class="toggle-switch active" onclick="toggleAlerts(this)"></div>
+            </div>
+
+            <!-- Chart Animation -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium">Chart Animation</label>
+                    <p class="text-xs text-gray-400">Smooth chart transitions</p>
+                </div>
+                <div class="toggle-switch active" onclick="toggleAnimation(this)"></div>
+            </div>
+        </div>
+
+        <div class="mt-6 flex flex-col sm:flex-row gap-2 md:gap-4">
+            <button onclick="exportData()" class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium w-full sm:w-auto">
+                📥 Export CSV
+            </button>
+            <button onclick="clearAlerts()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium w-full sm:w-auto">
+                🗑️ Clear Alerts
+            </button>
+            <button onclick="manualCleanup()" class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium w-full sm:w-auto">
+                🧹 Manual Cleanup
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Time Range Selector -->
+<div class="max-w-[1920px] mx-auto mb-4 md:mb-6">
+    <div class="glass-card rounded-xl p-3 md:p-4">
+        <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full overflow-hidden">
+                <span class="text-xs md:text-sm font-medium text-gray-400 whitespace-nowrap mb-1 sm:mb-0">Time Range:</span>
+                <div class="flex items-center gap-2 overflow-x-auto w-full pb-2 sm:pb-0" style="-webkit-overflow-scrolling: touch;">
+                    <button onclick="setTimeRange('live')" class="time-range-btn active rounded-lg font-medium transition-all flex-shrink-0">
+                        🔴 Live (5m)
+                    </button>
+                    <button onclick="setTimeRange('1h')" class="time-range-btn rounded-lg font-medium transition-all flex-shrink-0">
+                        1h
+                    </button>
+                    <button onclick="setTimeRange('6h')" class="time-range-btn rounded-lg font-medium transition-all flex-shrink-0">
+                        6h
+                    </button>
+                    <button onclick="setTimeRange('24h')" class="time-range-btn rounded-lg font-medium transition-all flex-shrink-0">
+                        24h
+                    </button>
+                    <button onclick="setTimeRange('7d')" class="time-range-btn rounded-lg font-medium transition-all flex-shrink-0">
+                        7d
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
+                <!-- Custom Date Range -->
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <input type="datetime-local" id="customFrom" class="w-full sm:w-auto px-2 py-1.5 md:px-3 md:py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs md:text-sm">
+                    <span class="text-gray-400 text-xs md:text-sm">to</span>
+                    <input type="datetime-local" id="customTo" class="w-full sm:w-auto px-2 py-1.5 md:px-3 md:py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs md:text-sm">
+                </div>
+                <button onclick="applyCustomRange()" class="px-3 py-1.5 md:px-4 md:py-2 rounded-lg btn-primary text-white text-xs md:text-sm font-medium w-full sm:w-auto">
+                    Apply
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs md:text-sm text-gray-400">
+            <span id="timeRangeInfo">Showing: Last 5 mins</span>
+            <span class="hidden sm:inline">•</span>
+            <span id="dataPointsInfo">Points: --</span>
+            <span class="hidden sm:inline">•</span>
+            <span id="loadingIndicator" class="hidden flex items-center gap-1 md:gap-2">
+                <div class="loading-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                Loading
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Main Metrics Grid -->
+<div class="max-w-[1920px] mx-auto grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6 mb-4 md:mb-6">
+    <!-- CPU Card -->
+    <div class="glass-card rounded-xl p-4 md:p-6 metric-card">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-semibold flex items-center gap-1 md:gap-2">
+                <span class="text-xl md:text-2xl">💻</span> CPU
+            </h3>
+            <span id="cpuStatus" class="status-dot"></span>
+        </div>
+        <div id="cpuMetrics" class="space-y-1 md:space-y-2">
+            <div class="text-2xl md:text-3xl font-bold">--</div>
+            <div class="text-xs md:text-sm text-gray-400">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Memory Card -->
+    <div class="glass-card rounded-xl p-4 md:p-6 metric-card">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-semibold flex items-center gap-1 md:gap-2">
+                <span class="text-xl md:text-2xl"></span> Mem
+            </h3>
+            <span id="memoryStatus" class="status-dot"></span>
+        </div>
+        <div id="memoryMetrics" class="space-y-1 md:space-y-2">
+            <div class="text-2xl md:text-3xl font-bold">--</div>
+            <div class="text-xs md:text-sm text-gray-400">Loading...</div>
+        </div>
+    </div>
+
+    <!-- GPU Utilization Card -->
+    <div class="glass-card rounded-xl p-4 md:p-6 metric-card">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-semibold flex items-center gap-1 md:gap-2">
+                <span class="text-xl md:text-2xl">🎮</span> GPU
+            </h3>
+            <span id="gpuUtilStatus" class="status-dot"></span>
+        </div>
+        <div id="gpuUtilMetrics" class="space-y-1 md:space-y-2">
+            <div class="text-2xl md:text-3xl font-bold">--</div>
+            <div class="text-xs md:text-sm text-gray-400">Loading...</div>
+        </div>
+    </div>
+
+    <!-- GPU Memory Card -->
+    <div class="glass-card rounded-xl p-4 md:p-6 metric-card">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-semibold flex items-center gap-1 md:gap-2">
+                <span class="text-xl md:text-2xl">🎯</span> VRAM
+            </h3>
+            <span id="gpuMemStatus" class="status-dot"></span>
+        </div>
+        <div id="gpuMemMetrics" class="space-y-1 md:space-y-2">
+            <div class="text-2xl md:text-3xl font-bold">--</div>
+            <div class="text-xs md:text-sm text-gray-400">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Internet Speed Card -->
+    <div class="glass-card rounded-xl p-4 md:p-6 metric-card col-span-2 lg:col-span-1">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-semibold flex items-center gap-1 md:gap-2">
+                <span class="text-xl md:text-2xl">🌐</span> Network
+            </h3>
+            <span id="speedtestStatus" class="status-dot status-ok"></span>
+        </div>
+        <div id="speedtestMetrics" class="space-y-1 md:space-y-2">
+            <div class="text-xs md:text-sm text-gray-400">No test run yet</div>
+        </div>
+        <button id="runSpeedtestBtn" onclick="runSpeedTest()" class="mt-3 md:mt-4 w-full px-2 md:px-3 py-1.5 md:py-2 rounded-lg btn-primary text-white text-xs md:text-sm font-medium flex items-center justify-center gap-1 md:gap-2">
+            <span id="speedtestBtnLabel">▶ Run Test</span>
+        </button>
+        <div id="speedtestLastRun" class="text-[10px] md:text-xs text-gray-500 mt-1 md:mt-2"></div>
+    </div>
+</div>
+
+<!-- Charts Grid -->
+<div class="max-w-[1920px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
+    <!-- CPU Chart -->
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <h3 class="text-sm md:text-lg font-semibold mb-2 md:mb-4">📊 CPU Usage</h3>
+        <div class="chart-container">
+            <canvas id="cpuChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Memory Chart -->
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <h3 class="text-sm md:text-lg font-semibold mb-2 md:mb-4">📊 Memory Usage</h3>
+        <div class="chart-container">
+            <canvas id="memoryChart"></canvas>
+        </div>
+    </div>
+
+    <!-- GPU Utilization Chart -->
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <h3 class="text-sm md:text-lg font-semibold mb-2 md:mb-4">📊 GPU Utilization</h3>
+        <div class="chart-container">
+            <canvas id="gpuUtilChart"></canvas>
+        </div>
+    </div>
+
+    <!-- GPU Memory Chart -->
+    <div class="glass-card rounded-xl p-4 md:p-6">
+        <h3 class="text-sm md:text-lg font-semibold mb-2 md:mb-4">📊 GPU Memory</h3>
+        <div class="chart-container">
+            <canvas id="gpuMemChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Summary -->
+<div id="statsSummary" class="max-w-[1920px] mx-auto mb-6 hidden">
+    <div class="glass-card rounded-xl p-6">
+        <h3 class="text-lg font-semibold mb-4">📈 Statistical Summary</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="statsContent">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Process Monitoring -->
+<div class="max-w-[1920px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- vLLM Process -->
+    <div class="glass-card rounded-xl p-6">
+        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span class="text-2xl">⚡</span> vLLM Process
+        </h3>
+        <div id="vllmMetrics">
+            <div class="text-gray-400">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Disk & Network -->
+    <div class="glass-card rounded-xl p-6">
+        <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span class="text-2xl">💾</span> Disk & Network
+        </h3>
+        <div id="diskNetworkMetrics">
+            <div class="text-gray-400">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts Panel -->
+<div class="max-w-[1920px] mx-auto mb-6">
+    <div class="glass-card rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">🚨 Recent Alerts</h3>
+            <div class="flex items-center gap-2">
+                <select id="alertFilter" onchange="filterAlerts()" class="px-3 py-1 bg-gray-800 border border-gray-700 rounded-lg text-sm">
+                    <option value="all">All Alerts</option>
+                    <option value="critical">Critical</option>
+                    <option value="warning">Warning</option>
+                    <option value="info">Info</option>
+                </select>
+                <span id="alertCount" class="text-sm text-gray-400">0 alerts</span>
+            </div>
+        </div>
+        <div id="alertsContainer" class="space-y-2 max-h-96 overflow-y-auto">
+            <p class="text-gray-400 text-sm">No alerts at the moment.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Data Table -->
+<div class="max-w-[1920px] mx-auto mb-6">
+    <div class="glass-card rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">📋 Data Table</h3>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleDataTable()" id="toggleTableBtn" class="px-4 py-2 rounded-lg btn-primary text-white text-sm font-medium">
+                    Show Table
+                </button>
+                <button onclick="downloadTableCSV()" class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium">
+                    Download CSV
+                </button>
+            </div>
+        </div>
+        <div id="dataTable" class="hidden overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                <tr class="border-b border-gray-700">
+                    <th class="text-left p-2">Timestamp</th>
+                    <th class="text-right p-2">CPU %</th>
+                    <th class="text-right p-2">Memory %</th>
+                    <th class="text-right p-2">GPU Util %</th>
+                    <th class="text-right p-2">GPU Mem %</th>
+                    <th class="text-right p-2">Temp °C</th>
+                    <th class="text-right p-2">vLLM</th>
+                </tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-gray-800">
+                <!-- Populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // This file is served from the vm_monitor_service.py process's own root
+    // (a separate process/port from the main app), so API calls are unprefixed.
+    const API_BASE = '';
+
+    // Global state
+    let ws;
+    let charts = {};
+    let currentTimeRange = 'live';
+    let settings = {
+        autoRefresh: true,
+        showAlerts: true,
+        chartAnimation: true
+    };
+    let historicalData = [];
+    let allAlerts = [];
+
+    // Initialize
+    window.onload = () => {
+        initCharts();
+        connectWebSocket();
+        fetchDatabaseStats();
+        fetchLatestSpeedtest();
+        setInterval(fetchDatabaseStats, 30000); // Update DB stats every 30s
+    };
+
+    // Chart initialization
+    function initCharts() {
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: settings.chartAnimation,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(59, 130, 246, 0.5)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: 'rgba(255,255,255,0.7)' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    x: {
+                        ticks: {
+                            color: 'rgba(255,255,255,0.7)',
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 10
+                        },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    }
+                }
+            }
+        };
+
+        // CPU Chart
+        charts.cpu = new Chart(document.getElementById('cpuChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // Memory Chart
+        charts.memory = new Chart(document.getElementById('memoryChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // GPU Utilization Chart
+        charts.gpuUtil = new Chart(document.getElementById('gpuUtilChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // GPU Memory Chart
+        charts.gpuMem = new Chart(document.getElementById('gpuMemChart'), {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        });
+    }
+
+    // WebSocket connection
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}${API_BASE}/ws`;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            updateConnectionStatus(true);
+        };
+
+        ws.onmessage = (event) => {
+            if (currentTimeRange === 'live' && settings.autoRefresh) {
+                const metrics = JSON.parse(event.data);
+                updateMetrics(metrics);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            updateConnectionStatus(false);
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            updateConnectionStatus(false);
+            setTimeout(connectWebSocket, 3000);
+        };
+    }
+
+    // Update metrics
+    function updateMetrics(metrics) {
+        updateCPUMetrics(metrics.cpu);
+        updateMemoryMetrics(metrics.memory);
+        updateGPUMetrics(metrics.gpu);
+        updateProcessMetrics(metrics.vllm, metrics.mysql);
+        updateDiskNetwork(metrics.disk, metrics.network);
+
+        if (currentTimeRange === 'live') {
+            updateCharts(metrics);
+        }
+    }
+
+    function updateCPUMetrics(cpu) {
+        if (!cpu || cpu.error) return;
+
+        const status = cpu.status || 'ok';
+        document.getElementById('cpuStatus').className = `status-dot status-${status}`;
+
+        document.getElementById('cpuMetrics').innerHTML = `
+                <div class="text-4xl font-bold">${cpu.percent}%</div>
+                <div class="text-sm text-gray-400 mt-2">
+                    <div>Load: ${cpu.load_1min} / ${cpu.load_5min} / ${cpu.load_15min}</div>
+                    <div class="mt-1">${cpu.count} cores @ ${cpu.frequency_current || '--'} MHz</div>
+                </div>
+            `;
+    }
+
+    function updateMemoryMetrics(memory) {
+        if (!memory || memory.error) return;
+
+        const status = memory.status || 'ok';
+        document.getElementById('memoryStatus').className = `status-dot status-${status}`;
+
+        document.getElementById('memoryMetrics').innerHTML = `
+                <div class="text-4xl font-bold">${memory.percent}%</div>
+                <div class="text-sm text-gray-400 mt-2">
+                    <div>${memory.used_gb} GB / ${memory.total_gb} GB</div>
+                    <div class="mt-1">Available: ${memory.available_gb} GB</div>
+                </div>
+            `;
+    }
+
+    function updateGPUMetrics(gpu) {
+        if (!gpu || !gpu.available || !gpu.gpus || gpu.gpus.length === 0) {
+            document.getElementById('gpuUtilMetrics').innerHTML = '<div class="text-gray-400">No GPU detected</div>';
+            document.getElementById('gpuMemMetrics').innerHTML = '<div class="text-gray-400">No GPU detected</div>';
+            return;
+        }
+
+        const g = gpu.gpus[0];
+
+        // GPU Utilization
+        const utilStatus = g.status || 'ok';
+        document.getElementById('gpuUtilStatus').className = `status-dot status-${utilStatus}`;
+        document.getElementById('gpuUtilMetrics').innerHTML = `
+                <div class="text-4xl font-bold">${g.utilization}%</div>
+                <div class="text-sm text-gray-400 mt-2">
+                    <div>${g.name}</div>
+                    <div class="mt-1">Temp: ${g.temperature}°C | ${g.power_draw}W</div>
+                </div>
+            `;
+
+        // GPU Memory
+        const memStatus = g.memory_percent > 95 ? 'critical' : (g.memory_percent > 80 ? 'warning' : 'ok');
+        document.getElementById('gpuMemStatus').className = `status-dot status-${memStatus}`;
+        document.getElementById('gpuMemMetrics').innerHTML = `
+                <div class="text-4xl font-bold">${g.memory_percent}%</div>
+                <div class="text-sm text-gray-400 mt-2">
+                    <div>${g.memory_used_gb} GB / ${g.memory_total_gb} GB</div>
+                    <div class="mt-1">Free: ${g.memory_free_gb} GB</div>
+                </div>
+            `;
+    }
+
+    function updateProcessMetrics(vllm, mysql) {
+        let html = '';
+
+        if (vllm && vllm.found) {
+            html += `<div class="flex items-center gap-2 mb-2">
+                    <span class="status-dot status-ok"></span>
+                    <span class="font-medium">vLLM Running</span>
+                </div>`;
+            vllm.processes.forEach(p => {
+                html += `<div class="text-sm text-gray-400">PID ${p.pid}: CPU ${p.cpu_percent}%, RAM ${p.memory_mb} MB</div>`;
+            });
+        } else {
+            html += `<div class="flex items-center gap-2 mb-2">
+                    <span class="status-dot status-critical"></span>
+                    <span class="font-medium">vLLM Not Running</span>
+                </div>`;
+        }
+
+        document.getElementById('vllmMetrics').innerHTML = html;
+    }
+
+    function updateDiskNetwork(disk, network) {
+        let html = '<div class="space-y-3">';
+
+        // Disk
+        if (disk && disk.partitions && disk.partitions.length > 0) {
+            const mainDisk = disk.partitions[0];
+            html += `<div>
+                    <div class="text-sm font-medium mb-1">Disk (${mainDisk.mountpoint})</div>
+                    <div class="text-sm text-gray-400">${mainDisk.used_gb} / ${mainDisk.total_gb} GB (${mainDisk.percent}%)</div>
+                </div>`;
+        }
+
+        // Network
+        if (network) {
+            html += `<div>
+                    <div class="text-sm font-medium mb-1">Network</div>
+                    <div class="text-sm text-gray-400">↑ ${network.send_rate_mbps} MB/s | ↓ ${network.recv_rate_mbps} MB/s</div>
+                </div>`;
+        }
+
+        html += '</div>';
+        document.getElementById('diskNetworkMetrics').innerHTML = html;
+    }
+
+    function updateCharts(metrics) {
+        const timestamp = new Date().toLocaleTimeString();
+        const maxPoints = 150;
+
+        // CPU
+        updateChart(charts.cpu, timestamp, metrics.cpu.percent, maxPoints);
+
+        // Memory
+        updateChart(charts.memory, timestamp, metrics.memory.percent, maxPoints);
+
+        // GPU
+        if (metrics.gpu.available && metrics.gpu.gpus && metrics.gpu.gpus.length > 0) {
+            updateChart(charts.gpuUtil, timestamp, metrics.gpu.gpus[0].utilization, maxPoints);
+            updateChart(charts.gpuMem, timestamp, metrics.gpu.gpus[0].memory_percent, maxPoints);
+        }
+    }
+
+    function updateChart(chart, label, value, maxPoints) {
+        chart.data.labels.push(label);
+        chart.data.datasets[0].data.push(value);
+
+        if (chart.data.labels.length > maxPoints) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+
+        chart.update(settings.chartAnimation ? undefined : 'none');
+    }
+
+    // Time range functions
+    async function setTimeRange(range) {
+        currentTimeRange = range;
+
+        // Update button states
+        document.querySelectorAll('.time-range-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+
+        // Show loading
+        document.getElementById('loadingIndicator').classList.remove('hidden');
+
+        // Fetch data based on range
+        if (range === 'live') {
+            document.getElementById('timeRangeInfo').textContent = 'Showing: Last 5 minutes (Live)';
+            await fetchRecentData(5);
+        } else if (range === '1h') {
+            document.getElementById('timeRangeInfo').textContent = 'Showing: Last 1 hour';
+            await fetchRangeData(1);
+        } else if (range === '6h') {
+            document.getElementById('timeRangeInfo').textContent = 'Showing: Last 6 hours';
+            await fetchRangeData(6);
+        } else if (range === '24h') {
+            document.getElementById('timeRangeInfo').textContent = 'Showing: Last 24 hours';
+            await fetchRangeData(24);
+        } else if (range === '7d') {
+            document.getElementById('timeRangeInfo').textContent = 'Showing: Last 7 days';
+            await fetchRangeData(168);
+        }
+
+        // Hide loading
+        document.getElementById('loadingIndicator').classList.add('hidden');
+    }
+
+    async function fetchRecentData(minutes) {
+        try {
+            const response = await fetch(`${API_BASE}/api/history/recent?minutes=${minutes}`);
+            const result = await response.json();
+            historicalData = result.data || [];
+            updateChartsFromHistory();
+            updateDataPointsInfo();
+        } catch (error) {
+            console.error('Failed to fetch recent data:', error);
+        }
+    }
+
+    async function fetchRangeData(hours) {
+        try {
+            const response = await fetch(`${API_BASE}/api/history/range?hours=${hours}`);
+            const result = await response.json();
+            historicalData = result.data || [];
+            updateChartsFromHistory();
+            updateDataPointsInfo();
+
+            // Show stats summary for non-live ranges
+            if (hours > 1) {
+                await fetchStatsSummary(hours);
+            }
+        } catch (error) {
+            console.error('Failed to fetch range data:', error);
+        }
+    }
+
+    async function fetchStatsSummary(hours) {
+        try {
+            const response = await fetch(`${API_BASE}/api/history/summary?hours=${hours}`);
+            const stats = await response.json();
+
+            document.getElementById('statsSummary').classList.remove('hidden');
+            document.getElementById('statsContent').innerHTML = `
+                    <div class="glass-card p-4 rounded-lg">
+                        <div class="text-sm text-gray-400">CPU</div>
+                        <div class="text-xs text-gray-500 mt-1">Min: ${stats.cpu_min?.toFixed(1)}% | Avg: ${stats.cpu_avg?.toFixed(1)}% | Max: ${stats.cpu_max?.toFixed(1)}%</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-lg">
+                        <div class="text-sm text-gray-400">Memory</div>
+                        <div class="text-xs text-gray-500 mt-1">Min: ${stats.mem_min?.toFixed(1)}% | Avg: ${stats.mem_avg?.toFixed(1)}% | Max: ${stats.mem_max?.toFixed(1)}%</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-lg">
+                        <div class="text-sm text-gray-400">GPU Util</div>
+                        <div class="text-xs text-gray-500 mt-1">Min: ${stats.gpu_util_min?.toFixed(1)}% | Avg: ${stats.gpu_util_avg?.toFixed(1)}% | Max: ${stats.gpu_util_max?.toFixed(1)}%</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-lg">
+                        <div class="text-sm text-gray-400">GPU Memory</div>
+                        <div class="text-xs text-gray-500 mt-1">Min: ${stats.gpu_mem_min?.toFixed(1)}% | Avg: ${stats.gpu_mem_avg?.toFixed(1)}% | Max: ${stats.gpu_mem_max?.toFixed(1)}%</div>
+                    </div>
+                `;
+        } catch (error) {
+            console.error('Failed to fetch stats summary:', error);
+        }
+    }
+
+    function updateChartsFromHistory() {
+        if (!historicalData || historicalData.length === 0) return;
+
+        // Downsample if too many points
+        let data = historicalData;
+        if (data.length > 500) {
+            const step = Math.ceil(data.length / 500);
+            data = data.filter((_, i) => i % step === 0);
+        }
+
+        const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+        const cpuData = data.map(d => d.cpu_percent);
+        const memData = data.map(d => d.memory_percent);
+        const gpuUtilData = data.map(d => d.gpu_utilization);
+        const gpuMemData = data.map(d => d.gpu_memory_percent);
+
+        // Update charts
+        charts.cpu.data.labels = labels;
+        charts.cpu.data.datasets[0].data = cpuData;
+        charts.cpu.update('none');
+
+        charts.memory.data.labels = labels;
+        charts.memory.data.datasets[0].data = memData;
+        charts.memory.update('none');
+
+        charts.gpuUtil.data.labels = labels;
+        charts.gpuUtil.data.datasets[0].data = gpuUtilData;
+        charts.gpuUtil.update('none');
+
+        charts.gpuMem.data.labels = labels;
+        charts.gpuMem.data.datasets[0].data = gpuMemData;
+        charts.gpuMem.update('none');
+    }
+
+    function updateDataPointsInfo() {
+        document.getElementById('dataPointsInfo').textContent = `Data Points: ${historicalData.length.toLocaleString()}`;
+    }
+
+    async function applyCustomRange() {
+        const from = document.getElementById('customFrom').value;
+        const to = document.getElementById('customTo').value;
+
+        if (!from || !to) {
+            alert('Please select both from and to dates');
+            return;
+        }
+
+        // This would require a custom API endpoint
+        alert('Custom range filtering coming soon!');
+    }
+
+    // Database stats
+    async function fetchDatabaseStats() {
+        try {
+            const response = await fetch(`${API_BASE}/api/stats`);
+            const stats = await response.json();
+            document.getElementById('recordCount').textContent = stats.metrics_count?.toLocaleString() || '--';
+        } catch (error) {
+            console.error('Failed to fetch DB stats:', error);
+        }
+    }
+
+    // Internet Speed Test
+    function renderSpeedtestResult(result) {
+        const metricsEl = document.getElementById('speedtestMetrics');
+        const statusEl = document.getElementById('speedtestStatus');
+        const lastRunEl = document.getElementById('speedtestLastRun');
+
+        if (!result || result.download_mbps === undefined) {
+            metricsEl.innerHTML = '<div class="text-sm text-gray-400">No test run yet</div>';
+            statusEl.className = 'status-dot status-ok';
+            lastRunEl.textContent = '';
+            return;
+        }
+
+        // Simple thresholds just to color the status dot
+        const download = result.download_mbps;
+        const status = download >= 25 ? 'ok' : (download >= 5 ? 'warning' : 'critical');
+        statusEl.className = `status-dot status-${status}`;
+
+        metricsEl.innerHTML = `
+                <div class="flex items-baseline gap-2">
+                    <span class="text-2xl font-bold">${result.download_mbps}</span>
+                    <span class="text-xs text-gray-400">Mbps ↓</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-lg font-semibold">${result.upload_mbps}</span>
+                    <span class="text-xs text-gray-400">Mbps ↑</span>
+                </div>
+                <div class="text-sm text-gray-400 mt-1">Ping: ${result.ping_ms} ms</div>
+                <div class="text-xs text-gray-500">${result.server_name || ''}${result.server_location ? ' · ' + result.server_location : ''}</div>
+            `;
+
+        if (result.timestamp) {
+            lastRunEl.textContent = `Last tested: ${new Date(result.timestamp).toLocaleString()}`;
+        }
+    }
+
+    async function fetchLatestSpeedtest() {
+        try {
+            const response = await fetch(`${API_BASE}/api/speedtest/latest`);
+            const result = await response.json();
+            if (result && result.download_mbps !== undefined) {
+                renderSpeedtestResult(result);
+            }
+        } catch (error) {
+            console.error('Failed to fetch latest speedtest:', error);
+        }
+    }
+
+    async function runSpeedTest() {
+        const btn = document.getElementById('runSpeedtestBtn');
+        const btnLabel = document.getElementById('speedtestBtnLabel');
+        const metricsEl = document.getElementById('speedtestMetrics');
+        const statusEl = document.getElementById('speedtestStatus');
+
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btnLabel.innerHTML = '<span class="loading-spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Testing...';
+        statusEl.className = 'status-dot status-warning';
+        metricsEl.innerHTML = '<div class="text-sm text-gray-400">Running speed test (10-20s)...</div>';
+
+        try {
+            const response = await fetch(`${API_BASE}/api/speedtest/run`, { method: 'POST' });
+            const result = await response.json();
+
+            if (!response.ok || result.error) {
+                metricsEl.innerHTML = `<div class="text-sm text-red-400">${result.error || 'Speed test failed'}</div>`;
+                statusEl.className = 'status-dot status-critical';
+            } else {
+                renderSpeedtestResult(result);
+            }
+        } catch (error) {
+            console.error('Speed test failed:', error);
+            metricsEl.innerHTML = '<div class="text-sm text-red-400">Speed test failed. See console.</div>';
+            statusEl.className = 'status-dot status-critical';
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btnLabel.textContent = '▶ Run Speed Test';
+        }
+    }
+
+    // Alerts
+    async function fetchAlerts() {
+        try {
+            const response = await fetch(`${API_BASE}/api/alerts?limit=50`);
+            allAlerts = await response.json();
+            displayAlerts();
+        } catch (error) {
+            console.error('Failed to fetch alerts:', error);
+        }
+    }
+
+    function displayAlerts() {
+        const filter = document.getElementById('alertFilter').value;
+        const filtered = filter === 'all' ? allAlerts : allAlerts.filter(a => a.level === filter);
+
+        document.getElementById('alertCount').textContent = `${filtered.length} alerts`;
+
+        if (filtered.length === 0) {
+            document.getElementById('alertsContainer').innerHTML = '<p class="text-gray-400 text-sm">No alerts match filter.</p>';
+            return;
+        }
+
+        const html = filtered.map(alert => `
+                <div class="alert-item glass-card p-3 rounded-lg border-l-4 border-${alert.level === 'critical' ? 'red' : alert.level === 'warning' ? 'yellow' : 'blue'}-500">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="status-dot status-${alert.level}"></span>
+                                <span class="font-medium text-sm">${alert.component}</span>
+                            </div>
+                            <div class="text-sm text-gray-300 mt-1">${alert.message}</div>
+                            <div class="text-xs text-gray-500 mt-1">${new Date(alert.timestamp).toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+        document.getElementById('alertsContainer').innerHTML = html;
+    }
+
+    function filterAlerts() {
+        displayAlerts();
+    }
+
+    setInterval(fetchAlerts, 10000); // Fetch alerts every 10 seconds
+    fetchAlerts(); // Initial fetch
+
+    // Settings functions
+    function toggleSettings() {
+        document.getElementById('settingsPanel').classList.toggle('hidden');
+    }
+
+    function toggleAutoRefresh(element) {
+        element.classList.toggle('active');
+        settings.autoRefresh = element.classList.contains('active');
+    }
+
+    function toggleAlerts(element) {
+        element.classList.toggle('active');
+        settings.showAlerts = element.classList.contains('active');
+    }
+
+    function toggleAnimation(element) {
+        element.classList.toggle('active');
+        settings.chartAnimation = element.classList.contains('active');
+
+        // Update all charts
+        Object.values(charts).forEach(chart => {
+            chart.options.animation = settings.chartAnimation;
+        });
+    }
+
+    function updateConnectionStatus(connected) {
+        const statusEl = document.getElementById('connectionStatus');
+        if (connected) {
+            statusEl.innerHTML = `
+                    <div class="status-dot status-ok"></div>
+                    <span class="text-sm">Connected</span>
+                `;
+        } else {
+            statusEl.innerHTML = `
+                    <div class="status-dot status-critical"></div>
+                    <span class="text-sm">Disconnected</span>
+                `;
+        }
+    }
+
+    // Data table functions
+    function toggleDataTable() {
+        const table = document.getElementById('dataTable');
+        const btn = document.getElementById('toggleTableBtn');
+
+        if (table.classList.contains('hidden')) {
+            table.classList.remove('hidden');
+            btn.textContent = 'Hide Table';
+            populateDataTable();
+        } else {
+            table.classList.add('hidden');
+            btn.textContent = 'Show Table';
+        }
+    }
+
+    function populateDataTable() {
+        if (historicalData.length === 0) return;
+
+        // Show last 100 records
+        const data = historicalData.slice(-100).reverse();
+
+        const html = data.map(row => `
+                <tr class="hover:bg-gray-800">
+                    <td class="p-2">${new Date(row.timestamp).toLocaleString()}</td>
+                    <td class="text-right p-2">${row.cpu_percent?.toFixed(1)}</td>
+                    <td class="text-right p-2">${row.memory_percent?.toFixed(1)}</td>
+                    <td class="text-right p-2">${row.gpu_utilization?.toFixed(1)}</td>
+                    <td class="text-right p-2">${row.gpu_memory_percent?.toFixed(1)}</td>
+                    <td class="text-right p-2">${row.gpu_temperature?.toFixed(0)}</td>
+                    <td class="text-right p-2">${row.vllm_running ? '✅' : '❌'}</td>
+                </tr>
+            `).join('');
+
+        document.getElementById('tableBody').innerHTML = html;
+    }
+
+    function downloadTableCSV() {
+        if (historicalData.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const headers = ['timestamp', 'cpu_percent', 'memory_percent', 'gpu_utilization', 'gpu_memory_percent', 'gpu_temperature', 'vllm_running'];
+        const csv = [
+            headers.join(','),
+            ...historicalData.map(row =>
+                headers.map(h => row[h] ?? '').join(',')
+            )
+        ].join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `metrics_${new Date().toISOString()}.csv`;
+        a.click();
+    }
+
+    async function exportData() {
+        await downloadTableCSV();
+    }
+
+    async function clearAlerts() {
+        if (confirm('Clear all alerts from database?')) {
+            // This would require an API endpoint
+            alert('Clear alerts feature coming soon!');
+        }
+    }
+
+    async function manualCleanup() {
+        if (confirm('Manually trigger cleanup of data older than 7 days?')) {
+            try {
+                const response = await fetch(`${API_BASE}/api/cleanup`, { method: 'POST' });
+                const result = await response.json();
+                alert(`Cleanup complete! ${result.stats.metrics_count} records remaining.`);
+                fetchDatabaseStats();
+            } catch (error) {
+                alert('Cleanup failed: ' + error.message);
+            }
+        }
+    }
+</script>
+</body>
+</html>

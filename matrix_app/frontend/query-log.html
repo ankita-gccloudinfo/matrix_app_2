@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Query Log — Admin</title>
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/query-log.css">
+  <link rel="stylesheet" href="/static/css/query-log-mobile.css">
+  <style>
+    /* ── PDF Uploads Tab ───────────────────────────────────────────── */
+    #pdfTab { padding: 0 24px 40px; }
+
+    .pdf-toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .pdf-toolbar input[type="text"] {
+      flex: 1;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.93rem;
+      min-width: 160px;
+    }
+    .pdf-toolbar button {
+      padding: 8px 18px;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid #cbd5e1;
+      cursor: pointer;
+      font-size: 0.93rem;
+    }
+    .merge-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 8px 0 16px;
+    }
+    .merge-toolbar input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      min-width: 220px;
+    }
+    .merge-toolbar button {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #6366f1;
+      color: white;
+      font-weight: 600;
+    }
+    .merge-toolbar button:disabled {
+      background: #a5b4fc;
+      cursor: not-allowed;
+    }
+    .merge-msg {
+      font-size: 0.8rem;
+      color: #475569;
+      margin-left: 4px;
+    }
+    .merge-msg.ok { color: #166534; }
+    .merge-msg.err { color: #991b1b; }
+
+    .pdf-stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .pdf-stat-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 20px;
+      min-width: 110px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .pdf-stat-val { font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+    .pdf-stat-lbl { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+
+    .pdf-table-wrap { overflow-x: auto; }
+    table.pdf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    }
+    table.pdf-table thead th {
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 600;
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    table.pdf-table tbody tr {
+      border-bottom: 1px solid #f1f5f9;
+      transition: background 0.15s;
+    }
+    table.pdf-table tbody tr:hover { background: #f8fafc; }
+    table.pdf-table tbody tr.hidden-pdf { display: none; }
+    table.pdf-table td { padding: 10px 14px; vertical-align: middle; }
+
+    .pdf-user-cell { display: flex; align-items: center; gap: 8px; }
+    .pdf-avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .pdf-avatar.admin-av {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+    }
+
+    .badge-admin {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 99px;
+      padding: 2px 9px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-user {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      border-radius: 99px;
+      padding: 2px 9px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .filename-cell { min-width: 200px; }
+    .filename-display { display: flex; align-items: center; gap: 8px; }
+    .filename-text {
+      font-family: monospace;
+      font-size: 0.88rem;
+      color: #1e293b;
+      word-break: break-all;
+    }
+    .rename-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 1rem;
+      line-height: 1;
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .rename-btn:hover { color: #6366f1; background: #ede9fe; }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 1rem;
+      line-height: 1;
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .delete-btn:hover { color: #dc2626; background: #fee2e2; }
+    .delete-selected-btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #dc2626;
+      color: white;
+      font-weight: 600;
+      font-size: 0.93rem;
+    }
+    .delete-selected-btn:hover { background: #b91c1c; }
+    .delete-selected-btn:disabled { background: #fca5a5; cursor: not-allowed; }
+
+    .rename-form {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .rename-form.open { display: flex; }
+    .rename-input {
+      flex: 1;
+      padding: 5px 10px;
+      border: 1.5px solid #6366f1;
+      border-radius: 6px;
+      font-size: 0.87rem;
+      font-family: monospace;
+      outline: none;
+      min-width: 140px;
+    }
+    .rename-save-btn {
+      padding: 5px 14px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      font-weight: 600;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .rename-save-btn:hover { background: #4f46e5; }
+    .rename-save-btn:disabled { background: #a5b4fc; cursor: not-allowed; }
+    .rename-cancel-btn {
+      padding: 5px 10px;
+      background: white;
+      color: #64748b;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.83rem;
+    }
+    .rename-cancel-btn:hover { background: #f1f5f9; }
+    .rename-msg {
+      font-size: 0.78rem;
+      margin-top: 3px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .rename-msg.ok  { background:#dcfce7; color:#166534; }
+    .rename-msg.err { background:#fee2e2; color:#991b1b; }
+
+    .chunks-badge {
+      display: inline-block;
+      background: #f1f5f9;
+      color: #475569;
+      border-radius: 99px;
+      padding: 2px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .empty-pdf {
+      text-align: center;
+      padding: 40px;
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="topbar-titles">
+    <h1>🗂️ Admin Dashboard</h1>
+    <p class="subtitle">Manage queries, users, and LiveAvatar tokens.</p>
+  </div>
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto;">
+    <button class="tab-btn active" onclick="switchTab('queryLog')"    id="tabQueryLog">Query Log</button>
+    <button class="tab-btn"        onclick="switchTab('pdfUploads')"  id="tabPdfUploads">📄 PDF Uploads</button>
+    <button class="tab-btn"        onclick="switchTab('accessControl')" id="tabAccessControl">Users &amp; Tokens</button>
+    <button class="tab-btn"        onclick="switchTab('voice')"       id="tabVoice">🔊 Voice (TTS)</button>
+  </div>
+</div>
+
+<!-- ═══════════ QUERY LOG TAB ═══════════ -->
+<div id="queryLogTab">
+  <div style="display: flex; flex-wrap: wrap; gap: 10px; padding: 0 24px; margin-bottom: 16px;">
+    <input type="text" id="searchInput" placeholder="Search by user or query..." oninput="filterRows()" style="flex:1; padding:8px 14px; border-radius:6px; border:1px solid #cbd5e1; min-width:160px;">
+    <button id="refreshBtn" onclick="loadQueryLog()" style="padding:8px 18px; border-radius:6px; background:white; border:1px solid #cbd5e1; cursor:pointer;">↻ Refresh</button>
+  </div>
+
+  <div class="merge-toolbar" id="queryLogSelectionToolbar" style="display:none; padding: 0 24px 12px 24px; margin:0;">
+    <button id="selectAllQueryBtn" class="delete-selected-btn" style="background:#2563eb;" onclick="selectAllQueryLogEntries()">Select All</button>
+    <button id="clearQuerySelectionBtn" class="delete-selected-btn" style="background:#64748b;" onclick="clearQuerySelection()">Clear</button>
+    <button id="deleteSelectedQueryBtn" class="delete-selected-btn" onclick="deleteSelectedQueryLogEntries()">🗑️ Delete Selected</button>
+    <span id="queryDeleteMsg" class="merge-msg"></span>
+  </div>
+
+  <div id="statsRow" style="display:none; padding:0 24px 16px 24px; gap:12px; flex-wrap:wrap;">
+    <div class="stat-card"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Queries</div></div>
+    <div class="stat-card"><div class="stat-val" id="statUsers">—</div><div class="stat-lbl">Unique Users</div></div>
+    <div class="stat-card"><div class="stat-val" id="statRewritten">—</div><div class="stat-lbl">Rewritten</div></div>
+    <div class="stat-card"><div class="stat-val" id="statAvgRows">—</div><div class="stat-lbl">Avg. Rows Found</div></div>
+  </div>
+
+  <div id="content">
+    <div id="state"><div class="state-icon">⏳</div>Loading query log...</div>
+    <table id="logTable" style="display:none;">
+      <thead>
+        <tr><th style="width:34px;">Select</th><th>User</th><th>Time</th><th>Query</th><th>Answer</th><th>Rows</th><th>Agent Workflow</th></tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ PDF UPLOADS TAB ═══════════ -->
+<div id="pdfTab" style="display:none;">
+  <div class="pdf-toolbar">
+    <input type="text" id="pdfSearchInput" placeholder="Search by filename or user..." oninput="filterPdfRows()">
+    <button onclick="loadPdfs()">↻ Refresh</button>
+  </div>
+
+  <div class="merge-toolbar" id="mergeToolbar" style="display:none;">
+    <input type="text" id="mergeNameInput" placeholder="Merged PDF name (e.g. combined.pdf)">
+    <button id="mergeBtn" onclick="mergeSelectedPdfs()">Merge Selected</button>
+    <span id="mergeMsg" class="merge-msg"></span>
+  </div>
+
+  <div class="merge-toolbar" id="deleteToolbar" style="display:none;">
+    <button class="delete-selected-btn" id="deleteSelectedBtn" onclick="deleteSelectedPdfs()">🗑️ Delete Selected</button>
+    <span id="deleteMsg" class="merge-msg"></span>
+  </div>
+
+  <div class="pdf-stats" id="pdfStats" style="display:none;">
+    <div class="pdf-stat-card"><div class="pdf-stat-val" id="pdfStatTotal">—</div><div class="pdf-stat-lbl">Total PDFs</div></div>
+    <div class="pdf-stat-card"><div class="pdf-stat-val" id="pdfStatUsers">—</div><div class="pdf-stat-lbl">Uploaders</div></div>
+    <div class="pdf-stat-card"><div class="pdf-stat-val" id="pdfStatAdmin">—</div><div class="pdf-stat-lbl">Admin Uploads</div></div>
+    <div class="pdf-stat-card"><div class="pdf-stat-val" id="pdfStatChunks">—</div><div class="pdf-stat-lbl">Total Chunks</div></div>
+  </div>
+
+  <div id="pdfState"><div class="state-icon">⏳</div>Loading PDF uploads...</div>
+
+  <div class="pdf-table-wrap" id="pdfTableWrap" style="display:none;">
+    <table class="pdf-table">
+      <thead>
+        <tr>
+          <th style="width:36px;">Select</th>
+          <th>Uploader</th>
+          <th>Filename</th>
+          <th>Pages</th>
+          <th>Chunks</th>
+          <th>Type</th>
+          <th>Uploaded At</th>
+        </tr>
+      </thead>
+      <tbody id="pdfBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ ACCESS CONTROL TAB ═══════════ -->
+<div id="accessControlTab" style="display:none;">
+  <div class="admin-panel">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; padding:0 0 18px 0; align-items:center;">
+      <div class="stat-card"><div class="stat-val" id="accessGroupsCount">—</div><div class="stat-lbl">Groups</div></div>
+      <div class="stat-card"><div class="stat-val" id="accessUsersCount">—</div><div class="stat-lbl">Users</div></div>
+      <button class="admin-btn" onclick="loadGroupsAndUsers()" style="margin-left:auto;">↻ Refresh</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+      <div class="admin-card">
+        <h2>Create Group</h2>
+        <p style="margin:0 0 14px 0; color:#64748b; font-size:0.92rem;">Create a LiveAvatar token group and map it to a user cohort.</p>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <input type="text" id="groupName" placeholder="Group Name" class="admin-input">
+          <input type="text" id="groupToken" placeholder="LiveAvatar API Token" class="admin-input">
+          <button onclick="createGroup()" class="admin-btn">Create Group</button>
+        </div>
+        <h3>Groups</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; text-align:left; border-collapse:collapse;">
+            <thead><tr style="border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">Name</th><th style="padding:8px;">Token</th></tr></thead>
+            <tbody id="groupsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h2>Assign Users</h2>
+        <p style="margin:0 0 14px 0; color:#64748b; font-size:0.92rem;">Map each user to a token group so their LiveAvatar access stays isolated.</p>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; text-align:left; border-collapse:collapse;">
+            <thead><tr style="border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">User</th><th style="padding:8px;">Group</th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ VOICE (TTS) TAB ═══════════ -->
+<div id="voiceTab" style="display:none;">
+  <div class="admin-panel">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; padding:0 0 18px 0; align-items:center;">
+      <div class="stat-card"><div class="stat-val" id="voiceKeysCount">—</div><div class="stat-lbl">Keys saved</div></div>
+      <div class="stat-card"><div class="stat-val" id="voiceKeysActive">—</div><div class="stat-lbl">Still active</div></div>
+      <button class="admin-btn" onclick="loadElevenLabsKeys()" style="margin-left:auto;">↻ Refresh</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+      <div class="admin-card">
+        <h2>ElevenLabs API Keys</h2>
+        <p style="margin:0 0 14px 0; color:#64748b; font-size:0.92rem;">
+          Paste your free ElevenLabs API keys (up to 7), one per line. Every spoken
+          reply uses the first key that still has credits; once a key comes back
+          quota-exceeded it's automatically skipped and the next one is used —
+          your browser's built-in voice is only used as a last resort if all keys
+          run out. Each key auto-picks a voice it's actually allowed to use on
+          its plan (free-plan keys 402 on most shared "voice library" voices) —
+          leave Voice ID blank unless you specifically want to force one voice
+          for every key.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <textarea id="elevenLabsKeysInput" placeholder="sk_...&#10;sk_...&#10;(one key per line, up to 7)" class="admin-input" rows="7" style="font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+          <input type="text" id="elevenLabsVoiceId" placeholder="Voice ID (optional — leave blank to auto-pick a voice each key can use)" class="admin-input">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button onclick="saveElevenLabsKeys()" class="admin-btn">Save Keys</button>
+            <button onclick="resetElevenLabsKeys()" class="admin-btn" style="background:#64748b;">Reset Exhausted (new billing month)</button>
+          </div>
+        </div>
+        <h3>Saved Keys</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; text-align:left; border-collapse:collapse;">
+            <thead><tr style="border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">#</th><th style="padding:8px;">Key</th><th style="padding:8px;">Status</th></tr></thead>
+            <tbody id="elevenLabsKeysBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── helpers ──────────────────────────────────────────────────────────────────
+const TRACE_NODE_TYPES = {
+  query_rewriter: 'core', router: 'core', merge: 'core',
+  judge_and_reason: 'core', answer: 'core',
+  table_selector_and_decider: 'sql', table_selector: 'sql',
+  value_grounding: 'sql', build_sql: 'sql',
+  execute_sql: 'sql', llm_validator: 'sql',
+  sql_judge_matches: 'safety', safe_sql: 'safety',
+  sql_column_validator: 'safety',
+  build_qdrant_query: 'qdrant', qdrant_search: 'qdrant',
+  pdf_search: 'pdf', pdf_answer: 'pdf',
+};
+const TRACE_TYPE_COLOR = {
+  core: '#4f8ef7', sql: '#10b981', safety: '#ef4444',
+  qdrant: '#8b5cf6', pdf: '#f59e0b', unknown: '#475569',
+};
+
+let allEntries = [];
+let allPdfs    = [];
+let selectedPdfIds = new Set();
+let selectedQueryIds = new Set();
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function initial(name) { return (name || '?').trim().charAt(0).toUpperCase() || '?'; }
+
+// ── Query Log rendering ───────────────────────────────────────────────────────
+function renderTraceStep(step, idx) {
+  const type = TRACE_NODE_TYPES[step.node] || 'unknown';
+  const color = TRACE_TYPE_COLOR[type] || '#475569';
+  const loopBadge = (step.retry_count !== null && step.retry_count !== undefined)
+    ? `<span class="trace-loop-badge">🔄 loop ${step.retry_count}</span>`
+    : '';
+  let html = `<div class="trace-step" style="--step-color:${color};">
+    <div class="trace-step-head">
+      <span class="trace-step-order">#${idx + 1}</span>
+      ${escapeHtml(step.node || 'unknown')}
+      <span class="trace-type-badge">${type}</span>
+      ${loopBadge}
+    </div>`;
+  if (step.user_query) html += `<div class="trace-field-label">Input Query</div><div class="trace-field-value">${escapeHtml(step.user_query)}</div>`;
+  if (step.prompt)     html += `<div class="trace-field-label">Prompt</div><div class="trace-field-value">${escapeHtml(step.prompt)}</div>`;
+  if (step.output)     html += `<div class="trace-field-label">Output</div><div class="trace-field-value">${escapeHtml(step.output)}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function toggleTrace(btn, rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const collapsed = row.classList.toggle('collapsed');
+  btn.classList.toggle('open', !collapsed);
+  btn.querySelector('.btn-label').textContent = `Agent Workflow (${btn.dataset.count})`;
+}
+window.toggleTrace = toggleTrace;
+
+function filterRows() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  document.querySelectorAll('tr.main-row').forEach(row => {
+    const hay = (row.dataset.user + ' ' + row.dataset.query).toLowerCase();
+    const match = !q || hay.includes(q);
+    row.classList.toggle('hidden-by-search', !match);
+    const traceRow = row.nextElementSibling;
+    if (traceRow && traceRow.classList.contains('trace-row') && !match) {
+      traceRow.classList.add('collapsed');
+    }
+  });
+}
+window.filterRows = filterRows;
+
+function renderStats(entries) {
+  const chatEntries = entries.filter(e => e.event === 'chat' || !e.event);
+  const users = new Set(chatEntries.map(e => e.user_name));
+  const rewritten = chatEntries.filter(e => e.rewritten_query).length;
+  const rowsWithCounts = chatEntries.filter(e => e.sql_rows !== null && e.sql_rows !== undefined);
+  const avgRows = rowsWithCounts.length ? Math.round(rowsWithCounts.reduce((s, e) => s + e.sql_rows, 0) / rowsWithCounts.length) : 0;
+  document.getElementById('statTotal').textContent = chatEntries.length;
+  document.getElementById('statUsers').textContent = users.size;
+  document.getElementById('statRewritten').textContent = rewritten;
+  document.getElementById('statAvgRows').textContent = rowsWithCounts.length ? avgRows : '—';
+  document.getElementById('statsRow').style.display = 'flex';
+}
+
+function syncQuerySelectionUi() {
+  const toolbar = document.getElementById('queryLogSelectionToolbar');
+  const hasAnySelection = selectedQueryIds.size >= 1;
+  document.getElementById('deleteSelectedQueryBtn').disabled = !hasAnySelection;
+  toolbar.style.display = hasAnySelection ? 'flex' : 'none';
+  document.getElementById('queryDeleteMsg').textContent = '';
+}
+
+function toggleQuerySelection(docId) {
+  if (!docId) return;
+  if (selectedQueryIds.has(docId)) {
+    selectedQueryIds.delete(docId);
+  } else {
+    selectedQueryIds.add(docId);
+  }
+  syncQuerySelectionUi();
+}
+window.toggleQuerySelection = toggleQuerySelection;
+
+function selectAllQueryLogEntries() {
+  allEntries.forEach(entry => {
+    if (entry.doc_id) selectedQueryIds.add(entry.doc_id);
+  });
+  syncQuerySelectionUi();
+}
+window.selectAllQueryLogEntries = selectAllQueryLogEntries;
+
+function clearQuerySelection() {
+  selectedQueryIds.clear();
+  syncQuerySelectionUi();
+}
+window.clearQuerySelection = clearQuerySelection;
+
+async function callDeleteQueryLogs(docIds) {
+  if (!docIds.length) return;
+  if (!confirm(`Permanently delete ${docIds.length} query-log row(s)? This removes them from the database.`)) {
+    return;
+  }
+
+  const res = await fetch('/api/admin/query-log-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc_ids: docIds }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Delete failed');
+  return data;
+}
+
+async function deleteSelectedQueryLogEntries() {
+  const selectedDocs = allEntries.filter(entry => selectedQueryIds.has(entry.doc_id));
+  if (!selectedDocs.length) return;
+
+  const msg = document.getElementById('queryDeleteMsg');
+  try {
+    const data = await callDeleteQueryLogs(selectedDocs.map(entry => entry.doc_id));
+    if (!data) return;
+    msg.textContent = `✓ Deleted ${data.mongo_deleted} query-log row(s)`;
+    msg.className = 'merge-msg ok';
+    selectedQueryIds.clear();
+    await loadQueryLog();
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+    msg.className = 'merge-msg err';
+  }
+}
+window.deleteSelectedQueryLogEntries = deleteSelectedQueryLogEntries;
+
+async function loadQueryLog() {
+  const stateEl = document.getElementById('state');
+  const table   = document.getElementById('logTable');
+  const body    = document.getElementById('logBody');
+  stateEl.style.display = '';
+  stateEl.className = '';
+  stateEl.innerHTML = '<div class="state-icon">⏳</div>Loading query log...';
+  table.style.display = 'none';
+  document.getElementById('statsRow').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/query-log');
+    if (res.status === 403) {
+      stateEl.id = 'denied';
+      stateEl.innerHTML = '<div class="state-icon">🔒</div>Admin access required.<br>Log in with an admin profile to view this page.';
+      return;
+    }
+    if (!res.ok) throw new Error('Failed to load query log');
+    const data = await res.json();
+    // Only show chat entries in this tab; pdf_upload events go to PDF Uploads tab
+    allEntries = (data.entries || []).filter(e => !e.event || e.event === 'chat');
+    if (!allEntries.length) {
+      stateEl.id = 'empty';
+      stateEl.innerHTML = '<div class="state-icon">🗒️</div>No queries logged yet.';
+      return;
+    }
+    renderStats(allEntries);
+
+    body.innerHTML = allEntries.map((e, i) => {
+      const rowId = `trace-row-${i}`;
+      const trace = e.trace || [];
+      const rewrittenHtml = e.rewritten_query ? `<div class="rewritten-note"><b>Rewritten:</b> ${escapeHtml(e.rewritten_query)}</div>` : '';
+      const traceCell = trace.length
+        ? `<button class="trace-toggle-btn" data-count="${trace.length}" onclick="toggleTrace(this, '${rowId}')">
+             <span class="chev">▶</span><span class="btn-label">Agent Workflow (${trace.length})</span>
+           </button>`
+        : `<span class="no-trace">No trace captured</span>`;
+      const traceDetailHtml = trace.length ? `<div class="trace-steps">${trace.map((step, idx) => renderTraceStep(step, idx)).join('')}</div>` : '';
+      const isSelected = selectedQueryIds.has(e.doc_id);
+      return `
+        <tr class="main-row" data-user="${escapeHtml(e.user_name)}" data-query="${escapeHtml(e.query)}">
+          <td style="width:34px;"><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleQuerySelection('${escapeHtml(e.doc_id)}')"></td>
+          <td class="user-cell"><span class="user-avatar">${initial(e.user_name)}</span><span class="user-name">${escapeHtml(e.user_name)}</span></td>
+          <td class="time-cell">${escapeHtml(e.created_at)}</td>
+          <td class="query-cell"><div class="cell-text">${escapeHtml(e.query)}</div>${rewrittenHtml}</td>
+          <td class="answer-cell"><div class="cell-text">${escapeHtml(e.answer)}</div></td>
+          <td class="rows-cell">${e.sql_rows !== null && e.sql_rows !== undefined ? `<span class="rows-badge">${e.sql_rows}</span>` : '—'}</td>
+          <td>${traceCell}</td>
+        </tr>
+        <tr class="trace-row collapsed" id="${rowId}">
+          <td colspan="7">${traceDetailHtml}</td>
+        </tr>`;
+    }).join('');
+    stateEl.style.display = 'none';
+    table.style.display = '';
+    document.getElementById('searchInput').style.display = '';
+    document.getElementById('refreshBtn').style.display = '';
+    syncQuerySelectionUi();
+  } catch (e) {
+    stateEl.id = 'state';
+    stateEl.innerHTML = '<div class="state-icon">⚠️</div>Error loading query log.';
+    console.error(e);
+  }
+}
+
+// ── PDF Uploads tab ───────────────────────────────────────────────────────────
+function filterPdfRows() {
+  const q = (document.getElementById('pdfSearchInput').value || '').toLowerCase().trim();
+  document.querySelectorAll('tr.pdf-row').forEach(row => {
+    const hay = (row.dataset.filename + ' ' + row.dataset.user).toLowerCase();
+    row.classList.toggle('hidden-pdf', !(!q || hay.includes(q)));
+  });
+}
+window.filterPdfRows = filterPdfRows;
+
+function syncPdfSelectionUi() {
+  const mergeToolbar = document.getElementById('mergeToolbar');
+  const hasMergeSelection = selectedPdfIds.size >= 2;
+  document.getElementById('mergeBtn').disabled = !hasMergeSelection;
+  mergeToolbar.style.display = hasMergeSelection ? 'flex' : 'none';
+  document.getElementById('mergeMsg').textContent = '';
+
+  const deleteToolbar = document.getElementById('deleteToolbar');
+  const hasAnySelection = selectedPdfIds.size >= 1;
+  document.getElementById('deleteSelectedBtn').disabled = !hasAnySelection;
+  deleteToolbar.style.display = hasAnySelection ? 'flex' : 'none';
+  document.getElementById('deleteMsg').textContent = '';
+}
+
+function togglePdfSelection(rowIdx) {
+  const pdf = allPdfs[rowIdx];
+  if (!pdf || !pdf.doc_id) return;
+  if (selectedPdfIds.has(pdf.doc_id)) {
+    selectedPdfIds.delete(pdf.doc_id);
+  } else {
+    selectedPdfIds.add(pdf.doc_id);
+  }
+  syncPdfSelectionUi();
+}
+window.togglePdfSelection = togglePdfSelection;
+
+async function mergeSelectedPdfs() {
+  const selectedDocs = allPdfs.filter(p => selectedPdfIds.has(p.doc_id));
+  if (selectedDocs.length < 2) {
+    alert('Select at least two PDF uploads to merge.');
+    return;
+  }
+
+  const mergeName = document.getElementById('mergeNameInput').value.trim();
+  if (!mergeName) {
+    alert('Please enter a merged PDF name.');
+    return;
+  }
+
+  const msg = document.getElementById('mergeMsg');
+  msg.textContent = 'Merging…';
+  msg.className = 'merge-msg';
+  try {
+    const res = await fetch('/api/admin/pdf-merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        doc_ids: selectedDocs.map(p => p.doc_id),
+        new_filename: mergeName,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Merge failed');
+
+    msg.textContent = `✓ Merged ${selectedDocs.length} PDFs into ${data.new_filename}`;
+    msg.className = 'merge-msg ok';
+    selectedPdfIds.clear();
+    document.getElementById('mergeNameInput').value = '';
+    await loadPdfs();
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+    msg.className = 'merge-msg err';
+  }
+}
+window.mergeSelectedPdfs = mergeSelectedPdfs;
+
+async function callDeletePdfs(docIds, filenamesForConfirm) {
+  const label = filenamesForConfirm.length === 1
+    ? `"${filenamesForConfirm[0]}"`
+    : `${filenamesForConfirm.length} PDFs (${filenamesForConfirm.join(', ')})`;
+  if (!confirm(`Permanently delete ${label}? This removes it from search and cannot be undone.`)) {
+    return;
+  }
+
+  const res = await fetch('/api/admin/pdf-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc_ids: docIds }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Delete failed');
+  return data;
+}
+
+async function deleteSelectedPdfs() {
+  const selectedDocs = allPdfs.filter(p => selectedPdfIds.has(p.doc_id));
+  if (!selectedDocs.length) return;
+
+  const msg = document.getElementById('deleteMsg');
+  try {
+    const data = await callDeletePdfs(selectedDocs.map(p => p.doc_id), selectedDocs.map(p => p.filename));
+    if (!data) return; // user cancelled the confirm dialog
+    msg.textContent = `✓ Deleted ${data.deleted_filenames.length} PDF(s) — ${data.qdrant_chunks_deleted} chunks removed`;
+    msg.className = 'merge-msg ok';
+    selectedPdfIds.clear();
+    await loadPdfs();
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message;
+    msg.className = 'merge-msg err';
+  }
+}
+window.deleteSelectedPdfs = deleteSelectedPdfs;
+
+async function deleteSinglePdf(rowIdx) {
+  const pdf = allPdfs[rowIdx];
+  if (!pdf || !pdf.doc_id) return;
+
+  const msgEl = document.getElementById(`fn-msg-${rowIdx}`);
+  try {
+    const data = await callDeletePdfs([pdf.doc_id], [pdf.filename]);
+    if (!data) return; // user cancelled the confirm dialog
+    selectedPdfIds.delete(pdf.doc_id);
+    await loadPdfs();
+  } catch (e) {
+    if (msgEl) {
+      msgEl.textContent = '✗ ' + e.message;
+      msgEl.className = 'rename-msg err';
+    }
+  }
+}
+window.deleteSinglePdf = deleteSinglePdf;
+
+function toggleRenameForm(rowIdx) {
+  const display = document.getElementById(`fn-display-${rowIdx}`);
+  const form    = document.getElementById(`fn-form-${rowIdx}`);
+  const isOpen  = form.classList.contains('open');
+  form.classList.toggle('open', !isOpen);
+  display.style.display = isOpen ? 'flex' : 'none';
+  if (!isOpen) {
+    // Reset input to current name when opening
+    document.getElementById(`fn-input-${rowIdx}`).value =
+      document.getElementById(`fn-text-${rowIdx}`).textContent;
+    document.getElementById(`fn-msg-${rowIdx}`).textContent = '';
+    document.getElementById(`fn-msg-${rowIdx}`).className  = 'rename-msg';
+  }
+}
+window.toggleRenameForm = toggleRenameForm;
+
+async function savePdfRename(rowIdx) {
+  const pdf       = allPdfs[rowIdx];
+  const input     = document.getElementById(`fn-input-${rowIdx}`);
+  const saveBtn   = document.getElementById(`fn-save-${rowIdx}`);
+  const msgEl     = document.getElementById(`fn-msg-${rowIdx}`);
+  const newName   = input.value.trim();
+
+  if (!newName || newName === pdf.filename) {
+    toggleRenameForm(rowIdx);
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  msgEl.textContent = '';
+  msgEl.className = 'rename-msg';
+
+  try {
+    const res = await fetch('/api/admin/pdf-rename', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        doc_id:       pdf.doc_id,
+        old_filename: pdf.filename,
+        new_filename: newName,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Rename failed');
+
+    // Update local state & display
+    const finalName = data.new_filename;
+    allPdfs[rowIdx].filename = finalName;
+
+    const fnText = document.getElementById(`fn-text-${rowIdx}`);
+    fnText.textContent = finalName;
+
+    // Update the row's search data attribute
+    const row = document.querySelector(`tr.pdf-row[data-rowidx="${rowIdx}"]`);
+    if (row) row.dataset.filename = finalName.toLowerCase();
+
+    msgEl.textContent = `✓ Renamed — ${data.qdrant_chunks} chunks updated`;
+    msgEl.className   = 'rename-msg ok';
+
+    // Close form after a short delay
+    setTimeout(() => {
+      const form    = document.getElementById(`fn-form-${rowIdx}`);
+      const display = document.getElementById(`fn-display-${rowIdx}`);
+      form.classList.remove('open');
+      display.style.display = 'flex';
+      msgEl.textContent = '';
+      msgEl.className   = 'rename-msg';
+    }, 1800);
+  } catch (err) {
+    msgEl.textContent = '✗ ' + err.message;
+    msgEl.className   = 'rename-msg err';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
+}
+window.savePdfRename = savePdfRename;
+
+function renderPdfStats(pdfs) {
+  const users      = new Set(pdfs.map(p => p.user_name));
+  const adminCount = pdfs.filter(p => p.is_admin_upload).length;
+  const totalChunks= pdfs.reduce((s, p) => s + (p.chunks || 0), 0);
+  document.getElementById('pdfStatTotal').textContent  = pdfs.length;
+  document.getElementById('pdfStatUsers').textContent  = users.size;
+  document.getElementById('pdfStatAdmin').textContent  = adminCount;
+  document.getElementById('pdfStatChunks').textContent = totalChunks;
+  document.getElementById('pdfStats').style.display    = 'flex';
+}
+
+async function loadPdfs() {
+  const stateEl  = document.getElementById('pdfState');
+  const tableWrap= document.getElementById('pdfTableWrap');
+  stateEl.style.display = '';
+  stateEl.innerHTML = '<div class="state-icon">⏳</div>Loading PDF uploads...';
+  tableWrap.style.display = 'none';
+  document.getElementById('pdfStats').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/admin/pdfs');
+    if (res.status === 403) {
+      stateEl.innerHTML = '<div class="state-icon">🔒</div>Admin access required.';
+      return;
+    }
+    if (!res.ok) throw new Error('Failed to load PDFs');
+    const data = await res.json();
+    allPdfs = data.pdfs || [];
+
+    if (!allPdfs.length) {
+      stateEl.innerHTML = '<div class="state-icon">📂</div>No PDFs uploaded yet.';
+      return;
+    }
+
+    renderPdfStats(allPdfs);
+
+    const tbody = document.getElementById('pdfBody');
+    tbody.innerHTML = allPdfs.map((p, i) => {
+      const isAdmin = p.is_admin_upload;
+      const avClass = isAdmin ? 'pdf-avatar admin-av' : 'pdf-avatar';
+      const badge   = isAdmin
+        ? `<span class="badge-admin">👑 Admin (shared)</span>`
+        : `<span class="badge-user">🔒 Private</span>`;
+      const isSelected = selectedPdfIds.has(p.doc_id);
+
+      return `
+        <tr class="pdf-row" data-rowidx="${i}" data-filename="${escapeHtml((p.filename||'').toLowerCase())}" data-user="${escapeHtml((p.user_name||'').toLowerCase())}">
+          <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="togglePdfSelection(${i})"></td>
+          <td>
+            <div class="pdf-user-cell">
+              <div class="${avClass}">${initial(p.user_name)}</div>
+              <span>${escapeHtml(p.user_name)}</span>
+            </div>
+          </td>
+          <td class="filename-cell">
+            <div class="filename-display" id="fn-display-${i}">
+              <span class="filename-text" id="fn-text-${i}">${escapeHtml(p.filename)}</span>
+              <button class="rename-btn" title="Rename" onclick="toggleRenameForm(${i})">✏️</button>
+              <button class="delete-btn" title="Delete" onclick="deleteSinglePdf(${i})">🗑️</button>
+            </div>
+            <div class="rename-form" id="fn-form-${i}">
+              <input class="rename-input" id="fn-input-${i}" type="text" value="${escapeHtml(p.filename)}"
+                     placeholder="new-name.pdf"
+                     onkeydown="if(event.key==='Enter') savePdfRename(${i}); if(event.key==='Escape') toggleRenameForm(${i});">
+              <button class="rename-save-btn"   id="fn-save-${i}"   onclick="savePdfRename(${i})">Save</button>
+              <button class="rename-cancel-btn"                      onclick="toggleRenameForm(${i})">Cancel</button>
+            </div>
+            <div class="rename-msg" id="fn-msg-${i}"></div>
+          </td>
+          <td>${p.pages ?? '—'}</td>
+          <td><span class="chunks-badge">${p.chunks ?? '—'}</span></td>
+          <td>${badge}</td>
+          <td style="white-space:nowrap; color:#64748b; font-size:0.85rem;">${escapeHtml(p.created_at)}</td>
+        </tr>`;
+    }).join('');
+
+    stateEl.style.display  = 'none';
+    tableWrap.style.display = '';
+    syncPdfSelectionUi();
+  } catch (e) {
+    stateEl.innerHTML = '<div class="state-icon">⚠️</div>Error loading PDFs.';
+    console.error(e);
+  }
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.getElementById('queryLogTab').style.display    = 'none';
+  document.getElementById('pdfTab').style.display         = 'none';
+  document.getElementById('accessControlTab').style.display = 'none';
+  document.getElementById('voiceTab').style.display       = 'none';
+  document.getElementById('tabQueryLog').className        = 'tab-btn';
+  document.getElementById('tabPdfUploads').className      = 'tab-btn';
+  document.getElementById('tabAccessControl').className   = 'tab-btn';
+  document.getElementById('tabVoice').className            = 'tab-btn';
+
+  if (tabId === 'queryLog') {
+    document.getElementById('queryLogTab').style.display = 'block';
+    document.getElementById('tabQueryLog').className = 'tab-btn active';
+    loadQueryLog();
+  } else if (tabId === 'pdfUploads') {
+    document.getElementById('pdfTab').style.display = 'block';
+    document.getElementById('tabPdfUploads').className = 'tab-btn active';
+    loadPdfs();
+  } else if (tabId === 'voice') {
+    document.getElementById('voiceTab').style.display = 'block';
+    document.getElementById('tabVoice').className = 'tab-btn active';
+    loadElevenLabsKeys();
+  } else {
+    document.getElementById('accessControlTab').style.display = 'block';
+    document.getElementById('tabAccessControl').className = 'tab-btn active';
+    loadGroupsAndUsers();
+  }
+}
+window.switchTab = switchTab;
+
+// ── Access Control ────────────────────────────────────────────────────────────
+let groupsData = [];
+
+async function loadGroupsAndUsers() {
+  try {
+    const [groupsRes, usersRes] = await Promise.all([
+      fetch('/api/admin/groups'),
+      fetch('/api/admin/users')
+    ]);
+    if (!groupsRes.ok || !usersRes.ok) throw new Error("Failed to load admin data");
+    const gData = await groupsRes.json();
+    const uData = await usersRes.json();
+    groupsData = gData.groups || [];
+    const users = uData.users || [];
+    document.getElementById('accessGroupsCount').textContent = groupsData.length;
+    document.getElementById('accessUsersCount').textContent = users.length;
+
+    const groupsBody = document.getElementById('groupsBody');
+    groupsBody.innerHTML = groupsData.map(g => `
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;">${escapeHtml(g.name)}</td>
+        <td style="padding:8px; font-family:monospace; font-size:0.8em; word-break:break-all;">${escapeHtml(g.liveavatar_token || '').substring(0, 20)}${(g.liveavatar_token || '').length > 20 ? '...' : ''}</td>
+      </tr>
+    `).join('');
+
+    const usersBody = document.getElementById('usersBody');
+    const groupOptions = `<option value="">-- No Group --</option>` +
+      groupsData.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+    usersBody.innerHTML = users.map(u => {
+      const finalOpts = groupOptions.replace(
+        `value="${u.group_id || ''}"`,
+        `value="${u.group_id || ''}" selected`
+      );
+      return `
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px;">${escapeHtml(u.name)}</td>
+          <td style="padding:8px;">
+            <select onchange="assignUser('${u.id}', this.value)" class="admin-select">
+              ${finalOpts}
+            </select>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    console.error(e);
+    alert("Error loading users and groups.");
+  }
+}
+
+async function createGroup() {
+  const name  = document.getElementById('groupName').value.trim();
+  const token = document.getElementById('groupToken').value.trim();
+  if (!name || !token) return alert("Name and token are required.");
+  try {
+    const res = await fetch('/api/admin/groups', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, liveavatar_token: token})
+    });
+    if (res.ok) {
+      document.getElementById('groupName').value  = '';
+      document.getElementById('groupToken').value = '';
+      loadGroupsAndUsers();
+    } else {
+      alert("Error creating group.");
+    }
+  } catch (e) { console.error(e); }
+}
+window.createGroup = createGroup;
+
+async function assignUser(userId, groupId) {
+  try {
+    const res = await fetch('/api/admin/users/assign', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, group_id: groupId})
+    });
+    if (!res.ok) alert("Failed to assign group.");
+  } catch (e) { console.error(e); }
+}
+window.assignUser = assignUser;
+
+// ── Voice (ElevenLabs TTS) ────────────────────────────────────────────────────
+async function loadElevenLabsKeys() {
+  try {
+    const res = await fetch('/api/admin/elevenlabs-keys');
+    if (!res.ok) throw new Error("Failed to load ElevenLabs keys");
+    const data = await res.json();
+    const keys = data.keys || [];
+
+    document.getElementById('voiceKeysCount').textContent  = keys.length;
+    document.getElementById('voiceKeysActive').textContent = keys.filter(k => !k.exhausted).length;
+    document.getElementById('elevenLabsVoiceId').value = data.voice_id || '';
+
+    const body = document.getElementById('elevenLabsKeysBody');
+    body.innerHTML = keys.length ? keys.map((k, i) => `
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px;">${i + 1}</td>
+        <td style="padding:8px; font-family:monospace; font-size:0.85em;">${escapeHtml(k.key_preview)}</td>
+        <td style="padding:8px;">${k.exhausted
+          ? '<span style="color:#ef4444;font-weight:600;">Exhausted</span>'
+          : '<span style="color:#10b981;font-weight:600;">Active</span>'}</td>
+      </tr>
+    `).join('') : `<tr><td colspan="3" style="padding:8px; color:#94a3b8;">No keys saved yet.</td></tr>`;
+  } catch (e) {
+    console.error(e);
+    alert("Error loading ElevenLabs keys.");
+  }
+}
+window.loadElevenLabsKeys = loadElevenLabsKeys;
+
+async function saveElevenLabsKeys() {
+  const raw = document.getElementById('elevenLabsKeysInput').value;
+  const keys = raw.split('\n').map(k => k.trim()).filter(Boolean);
+  if (!keys.length) return alert("Paste at least one API key.");
+  if (keys.length > 7) return alert("Max 7 keys — trim the list and try again.");
+  const voiceId = document.getElementById('elevenLabsVoiceId').value.trim();
+  try {
+    const res = await fetch('/api/admin/elevenlabs-keys', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keys, voice_id: voiceId || null})
+    });
+    if (res.ok) {
+      document.getElementById('elevenLabsKeysInput').value = '';
+      loadElevenLabsKeys();
+    } else {
+      alert("Error saving keys.");
+    }
+  } catch (e) { console.error(e); alert("Error saving keys."); }
+}
+window.saveElevenLabsKeys = saveElevenLabsKeys;
+
+async function resetElevenLabsKeys() {
+  if (!confirm("Clear the 'exhausted' flag on all saved keys? Do this once your ElevenLabs free-tier credits refill for the month.")) return;
+  try {
+    const res = await fetch('/api/admin/elevenlabs-keys/reset', {method: 'POST'});
+    if (res.ok) loadElevenLabsKeys();
+    else alert("Error resetting keys.");
+  } catch (e) { console.error(e); alert("Error resetting keys."); }
+}
+window.resetElevenLabsKeys = resetElevenLabsKeys;
+
+// initial load
+loadQueryLog();
+</script>
+</body>
+</html>
