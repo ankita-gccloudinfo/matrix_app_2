@@ -44,7 +44,7 @@ _WORKER_URL = f"http://127.0.0.1:{_WORKER_PORT}"
 # Embeddings are ALWAYS computed by an external OpenAI-compatible
 # /v1/embeddings server (e.g. vLLM serving jina-embeddings-v3 on a GPU box).
 # The local worker subprocess is only spawned to run the reranker model.
-EXTERNAL_EMBEDDINGS_URL = os.getenv("EXTERNAL_EMBEDDINGS_URL", "http://10.242.24.35:2225/v1/embeddings")
+EXTERNAL_EMBEDDINGS_URL = os.getenv("EXTERNAL_EMBEDDINGS_URL", "http://100.100.130.85:2225/v1/embeddings")
 EXTERNAL_EMBEDDINGS_MODEL = os.getenv("EXTERNAL_EMBEDDINGS_MODEL", "jinaai/jina-embeddings-v3")
 
 pdf_qdrant_client = QdrantClient(host=PDF_QDRANT_HOST, port=PDF_QDRANT_PORT)

@@ -63,7 +63,7 @@ demos_collection = _db["demos"]
 # ollamaagent2.py talks to by default (see scaffold.py's
 # _OLLAMAAGENT_TEMPLATE) — reused here purely to draft the throwaway demo
 # preview HTML below, not to run a real chatbot.
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://10.242.71.180:2211/v1")
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://100.98.23.74:2211/v1")
 VLLM_MODEL_NAME = os.getenv("VLLM_MODEL_NAME", "Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8")
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 

@@ -288,11 +288,11 @@ _OLLAMAAGENT_TEMPLATE = '''import os
 # project.
 LLM_BACKEND = os.getenv("LLM_BACKEND", "vllm")  # "vllm" or "ollama"
 
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://10.242.71.180:2211/v1")
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://100.98.23.74:2211/v1")
 VLLM_MODEL_NAME = os.getenv("VLLM_MODEL_NAME", "Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8")
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")  # vLLM ignores this unless it was started with --api-key
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://10.242.24.35:11434/api/generate")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://100.100.130.85:11434/api/generate")
 OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "qwen3-coder:30b")
 
 import re
@@ -486,9 +486,9 @@ window.APP_CONFIG = {{
 
 _ENV_TEMPLATE = (
     "HF_TOKEN=\nLIVEAVATAR_API_KEY=\n"
-    "MONGO_URI=mongodb://10.242.24.35:27017\n"
+    "MONGO_URI=mongodb://100.100.130.85:27017\n"
     "MONGO_DB_NAME={project_id}_db\n"  # own database — don't default to police_intel_db, that's matrix_app's and would silently share query/user/PDF data with every other project on the same Mongo host
-    "PDF_QDRANT_HOST=10.242.24.35\n"
+    "PDF_QDRANT_HOST=100.100.130.85\n"
 )
 
 _GITIGNORE_TEMPLATE = "__pycache__/\n*.pyc\n*.pyo\n\nserver_restart.log\nworker.log\nmetrics.db\n"

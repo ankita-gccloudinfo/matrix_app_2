@@ -1,25 +1,39 @@
 LLM_BACKEND = "vllm" # Change to "ollama" to use the Ollama backend
 
-VLLM_BASE_URL = "http://10.242.71.180:2211/v1"
+VLLM_BASE_URL = "http://100.98.23.74:2211/v1"
 VLLM_MODEL_NAME = ""
 VLLM_API_KEY = "EMPTY"  # vLLM ignores this unless it was started with --api-key
 
-OLLAMA_URL = "http://10.242.24.35:11434/api/generate"
+OLLAMA_URL = "http://100.100.130.85:11434/api/generate"
 OLLAMA_MODEL_NAME = "qwen3-coder:30b"
 
-MYSQL_HOST = "10.242.71.180"
+# ── Dedicated SQL-generation backend ────────────────────────────────────────
+# A separate, smaller vLLM instance serving a LoRA fine-tune of
+# Qwen2.5-Coder-7B-Instruct (4-bit, via Unsloth) trained specifically on
+# MySQL query generation for this schema ("project-qwen26-mysql-lora").
+# Used ONLY by generate_sql() below — every other node keeps using the general-purpose backend above (VLLM_BASE_URL / OLLAMA_URL) via call_llm(),since this fine-tune targets SQL synthesis, not general reasoning/NLU.
+#
+# Set SQL_GEN_USE_FINETUNED_MODEL = False to disable and fall back to the original VLLM_BASE_URL path for generate_sql() without touching any code— useful for A/B testing correctness/latency against test_pipeline_scenarios.py before rolling this out for real traffic.
+SQL_GEN_USE_FINETUNED_MODEL = False  # Use the general LLM backend for SQL generation
+
+SQL_VLLM_BASE_URL = "http://100.97.41.98:8000/v1"
+SQL_VLLM_MODEL_NAME = "unsloth_Qwen2.5-Coder-7B-Instruct-bnb-4bit__project-qwen26-mysql-lora_1789210014"
+SQL_VLLM_API_KEY = "sk-unsloth-310413cb63671ea4a5e4b49a18e5b738"
+SQL_VLLM_TIMEOUT_SECONDS = 60
+
+MYSQL_HOST = "100.98.23.74"
 MYSQL_PORT = "3306"
 MYSQL_USER = "readUser"
 MYSQL_PASSWORD = "readUser@123"
 MYSQL_DB = "up_police_matrix"
 
-QDRANT_HOST_DEFAULT = "10.242.24.35"
+QDRANT_HOST_DEFAULT = "100.100.130.85"
 QDRANT_PORT_DEFAULT = 6333
 QDRANT_COLLECTION = "content_index"
 JINA_API_URL = "https://api.jina.ai/v1/embeddings"
 JINA_MODEL = "jina-embeddings-v3"
 
-NEO4J_URI      = "bolt://10.242.24.35:7687"
+NEO4J_URI      = "bolt://100.100.130.85:7687"
 NEO4J_USER     = "neo4j"
 NEO4J_PASSWORD = "YourStrongPassword"
 
@@ -788,6 +802,16 @@ QDRANT_HOST = os.environ.get("QDRANT_HOST", QDRANT_HOST_DEFAULT)
 QDRANT_PORT = int(os.environ.get("QDRANT_PORT", str(QDRANT_PORT_DEFAULT)))
 JINA_API_KEY = os.environ.get("JINA_API_KEY", "")
 
+# Dedicated SQL-generation backend (fine-tuned Qwen2.5-Coder-7B MySQL LoRA) —
+# see declarations near the top of the file for what each of these does.
+SQL_GEN_USE_FINETUNED_MODEL = os.environ.get(
+    "SQL_GEN_USE_FINETUNED_MODEL", str(SQL_GEN_USE_FINETUNED_MODEL)
+).lower() == "true"
+SQL_VLLM_BASE_URL = os.environ.get("SQL_VLLM_BASE_URL", SQL_VLLM_BASE_URL)
+SQL_VLLM_MODEL_NAME = os.environ.get("SQL_VLLM_MODEL_NAME", SQL_VLLM_MODEL_NAME)
+SQL_VLLM_API_KEY = os.environ.get("SQL_VLLM_API_KEY", SQL_VLLM_API_KEY)
+SQL_VLLM_TIMEOUT_SECONDS = int(os.environ.get("SQL_VLLM_TIMEOUT_SECONDS", str(SQL_VLLM_TIMEOUT_SECONDS)))
+
 
 # LangChain LLM client — points at the same vLLM OpenAI-compatible endpoint
 llm = ChatOpenAI(
@@ -936,6 +960,12 @@ class State(TypedDict):
     last_sql_context: str               # exact SQL/topics from the previous turn
     session_log: list                   # in-memory log of executed SQL
     last_topic_ids: list                # [{"topic_id": ..., "title": ...}] from the previous turn's SQL results
+    last_executed_sql: str              # exact SQL text run last turn — reused verbatim (WHERE/ORDER BY unchanged) for pagination continuations instead of asking the LLM to regenerate it
+    last_sql_offset: int                # cumulative rows already shown for last_executed_sql's result set — becomes the OFFSET for the next "show more"/"next N" continuation (0 = nothing shown yet / fresh query)
+    is_pagination_request: bool         # true when the LATEST message is a deterministic "show more"/"next N" continuation of the previous SQL result set (set by query_rewriter_node)
+    pagination_requested_count: int     # explicit batch size the user asked for ("next 10" -> 10); 0 = reuse the previous batch's LIMIT size
+    applied_pagination_offset: int      # the OFFSET actually used for this turn's SQL (set by generate_sql_node, consumed by execute_sql_node to compute the next turn's last_sql_offset)
+    pagination_exhausted: bool          # true when this was a pagination continuation that returned 0 rows (no more results left) — lets answer_node phrase that correctly instead of saying the search itself failed
     resolved_topic_reference: str       # confirmed unique_topic_id if user says "this post/topic"
     post_metadata: dict                 # mapping of post_id to {url, source} for the final answer
     has_table_topic: bool               # output of check_query_manager — routes to keyword steps or straight to table_selector
@@ -950,6 +980,8 @@ class State(TypedDict):
     duck_search_verify_done: bool       # flag to avoid re-running go_duck_search_verify more than once per turn
     duck_resolved_terms: List[str]      # short forms already looked up this turn (resolved or not)
     keyword_combination_string: str     # EN/Hindi spelling + hashtag + related-entity OR-group from keyword_of_post_maker, fed into generate_sql
+    hashtag_intent_detected: bool       # true when the query uses natural-language "hash/hashtag/mentions/tags" wording instead of a literal '#'
+    hashtag_intent_term: str            # specific tag named alongside that wording (e.g. "uppolice"); empty = general "top hashtags" request
     answer_feedback: str                # feedback from answer_checker to add missing details
     answer_retry_count: int             # counter for answer_checker loop
     neo4j_graph_context: str            # structured graph answer from neo4j_search_node
@@ -1092,7 +1124,7 @@ Output ONLY a JSON object:
 # QUERY REWRITER — grammar fix + conversation-history relation
 # =========================
 # =========================
-# VOICE ENTITY GROUNDING 
+# VOICE ENTITY GROUNDING (Phase 5)
 # =========================
 # STT (browser SpeechRecognition / self-hosted Nemotron ASR — see script.js)
 # can mishear names, handles, and hashtags. Rather than trust a voice
@@ -1181,6 +1213,133 @@ def _ground_voice_entities(entities: List[str]) -> Dict[str, Any]:
     return result
 
 
+# Natural-language ways users refer to a hashtag/mention without typing the
+# literal '#' — the dataset's hashtag lookup (hashtags.hashtag_keyword /
+# hashtag_hindi_keyword) and the deterministic '#' guard further down
+# (_hashtag_terms_are_empty) only recognize a literal '#', so a query like
+# "what is the hash today" or "hash mentions of uppolice" would otherwise
+# never reach that logic and instead loop in this node's own ambiguous-
+# request clarification (see Job 0 instruction injected below).
+_HASHTAG_INTENT_WORDS_RE = re.compile(
+    r"\bhash(?:tag)?(?:s|ed|ging)?\b|\bmentions?\b|\btags?\b",
+    re.IGNORECASE,
+)
+
+# Connector/filler words that can sit between a hashtag-intent word and a
+# real tag name, or trail one without naming anything — e.g. "hash mentions
+# today", "hashtag for X", "what is the hashtag" (no specific tag named).
+_HASHTAG_QUERY_STOPWORDS = {
+    "today", "yesterday", "content", "mention", "mentions", "tag", "tags",
+    "hashtag", "hashtags", "hash", "hashed", "used", "post", "posts", "the",
+    "database", "matrix", "trends", "trend", "trending", "social", "media",
+    "of", "on", "for", "about", "in", "is", "are", "was", "were", "what",
+    "show", "me", "please", "give", "list", "and", "or", "that", "this",
+    "week", "weeks", "month", "months", "year", "years", "hour", "hours",
+    "day", "days", "recent", "latest", "most", "top", "all", "current",
+}
+
+
+def _detect_hashtag_intent(query: str) -> bool:
+    """True when `query` uses a natural-language hashtag/mention word
+    ('hash', 'hashtag', 'hashed', 'mentions', 'tags'...) but contains no
+    literal '#' — i.e. the user means hashtags, but the '#'-keyed machinery
+    elsewhere in the pipeline won't recognize it as such without
+    normalization."""
+    if "#" in query:
+        return False  # already a literal '#' — existing logic handles it
+    return bool(_HASHTAG_INTENT_WORDS_RE.search(query))
+
+
+def _extract_named_hashtag_term(query: str) -> str:
+    """When hashtag intent is detected AND a specific tag/handle is named
+    close to the hashtag-intent word (e.g. "hash mentions of uppolice",
+    "hashtag for bjplucknow"), pull out that term. Returns "" when the
+    query only asks about hashtags in general ("what is the hash today",
+    "hashed mentions used in posts today") with no specific term — that's a
+    trending/most-used-hashtags request, not a search for one hashtag.
+    Only looks a few words past each hashtag-intent word (not the whole
+    message) so unrelated trailing words don't get mistaken for a tag."""
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9_]*", query)
+    lowered = [t.lower() for t in tokens]
+    for i, lw in enumerate(lowered):
+        if not _HASHTAG_INTENT_WORDS_RE.fullmatch(lw):
+            continue
+        for lw2 in lowered[i + 1: i + 5]:
+            if _HASHTAG_INTENT_WORDS_RE.fullmatch(lw2) or lw2 in _HASHTAG_QUERY_STOPWORDS:
+                continue
+            if len(lw2) < 3:
+                continue
+            return lw2
+    return ""
+
+
+def _hashtag_intent_job_instruction(hashtag_intent_term: str) -> str:
+    """Prompt block injected into query_rewriter's LLM call so it stops
+    treating hashtag/mention wording as an ambiguous request needing
+    clarification, and instead normalizes it into the literal '#' form the
+    rest of the pipeline already understands."""
+    if hashtag_intent_term:
+        return f"""
+## Job 0 — Hashtag/mention wording (deterministic — do NOT ask for clarification)
+
+The user's message uses a natural-language hashtag word ("hash", "hashtag",
+"mentions", "tags") instead of typing '#'. In this dataset that ALWAYS means
+the '#' hashtag/mention feature. Do NOT set needs_clarification=true because
+of this wording. Rewrite corrected_query so the named term is expressed as a
+literal hashtag — e.g. turn "hash mentions of {hashtag_intent_term}" into
+something that includes "#{hashtag_intent_term}" literally.
+
+---
+"""
+    return """
+## Job 0 — Hashtag/mention wording (deterministic — do NOT ask for clarification)
+
+The user's message uses a natural-language hashtag word ("hash", "hashtag",
+"mentions", "tags") instead of typing '#', with NO specific hashtag named.
+This means the user wants the most-used hashtags/mentions for the given time
+period — e.g. "what is the hash today" means "what are the most-used
+hashtags/mentions in today's posts". Do NOT set needs_clarification=true
+because of this wording. Set corrected_query to a clear standalone request
+for the top/most-used hashtags for that time period.
+
+---
+"""
+
+
+# ── Pagination follow-up detection (deterministic) ──────────────────────────
+# "show more" / "next 10" / "show next" etc. must reliably continue the
+# previous SQL result set (same WHERE/ORDER BY, advanced OFFSET) rather than
+# being left to an LLM classification that can silently drift. Kept
+# deterministic and regex-based, the same pattern used for the hashtag-intent
+# guard above, so this can never be talked out of firing by prompt phrasing.
+_PAGINATION_RE = re.compile(
+    r"^\s*(show\s+|give\s+|send\s+)?(me\s+)?(the\s+)?"
+    r"(next|more)(\s+(\d+))?(\s+(results?|rows?|posts?|topics?|items?|ones?))?\s*$",
+    re.IGNORECASE,
+)
+# Phrases that contain "next"/"more" but are NOT a pagination continuation —
+# excluded so this guard doesn't misfire on unrelated short messages.
+_PAGINATION_EXCLUDE_RE = re.compile(
+    r"\b(next\s+(week|month|year|day|time|step)|more\s+(details?|info|information|about))\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_pagination_request(text: str):
+    """Returns the explicitly requested batch size (0 if unspecified) if
+    `text` is a short 'show more'/'next N' continuation request, else None."""
+    t = (text or "").strip()
+    if not t or len(t.split()) > 6:
+        return None
+    if _PAGINATION_EXCLUDE_RE.search(t):
+        return None
+    m = _PAGINATION_RE.match(t)
+    if not m:
+        return None
+    count_str = m.group(6)
+    return int(count_str) if count_str else 0
+
+
 async def query_rewriter_node(state: State) -> dict:
     """START -> here first, every turn.
 
@@ -1193,6 +1352,43 @@ async def query_rewriter_node(state: State) -> dict:
     immediately ask the user for clarification instead of re-processing.
     """
     query = state.get("original_query") or state["query"]
+
+    # ── Hashtag/mention wording detection (deterministic, no LLM) ──────────
+    # Runs before anything else so both the prompt injected below AND the
+    # post-parse override further down can act on it.
+    hashtag_intent_detected = _detect_hashtag_intent(query)
+    hashtag_intent_term = _extract_named_hashtag_term(query) if hashtag_intent_detected else ""
+
+    # ── Pagination follow-up shortcut (deterministic, no LLM) ───────────────
+    # "show more" / "next 10" only ever means "continue the previous SQL
+    # result set" — never ambiguous, so it bypasses the LLM job entirely
+    # (same reasoning as the hashtag-intent guard) rather than risking the
+    # model treating it as a new/unrelated short query. Only fires when
+    # there's an actual previous SQL result to continue (last_executed_sql
+    # threaded in from server.py's session store); otherwise falls through
+    # to the normal elliptical-follow-up handling below, which will
+    # correctly ask for clarification since there's nothing to page through.
+    if (
+        not state.get("fallback_exhausted")
+        and not state.get("pending_keyword_confirmation")
+    ):
+        pagination_count = _detect_pagination_request(query)
+        if pagination_count is not None and state.get("last_executed_sql"):
+            add_trace("query_rewriter", user_query=query,
+                       output=f"[pagination] '{query}' resolved as a continuation "
+                              f"of the previous SQL result set "
+                              f"(requested_count={pagination_count or '(same as before)'})")
+            return {
+                "corrected_query": "Show the next batch of results from the previous query.",
+                "rewrite_context": "Pagination continuation of the previous SQL result set.",
+                "needs_clarification": False,
+                "explain_request": False,
+                "resolved_topic_reference": "",
+                "hashtag_intent_detected": False,
+                "hashtag_intent_term": "",
+                "is_pagination_request": True,
+                "pagination_requested_count": pagination_count,
+            }
 
     # ── Greeting shortcut ──────────────────────────────────────────────────
     # Plain small talk ("hi", "hello", "namaste", ...) never needs a DB lookup.
@@ -1367,7 +1563,7 @@ You have four jobs on the user's LATEST message.
 You do NOT answer the user.
 You do NOT generate SQL.
 You only rewrite and resolve context.
-
+{_hashtag_intent_job_instruction(hashtag_intent_term) if hashtag_intent_detected else ""}
 ## Job 1 — Grammar correction
 
 Fix spelling, grammar, and typing mistakes in the LATEST message ONLY.
@@ -1584,6 +1780,43 @@ If no valid resolution:
 
 ---
 
+## Job 5 — Domain Vocabulary Normalization
+
+Users describe requests across 10 monitoring domains (law & order/unrest,
+women's safety, caste-related monitoring, crime & OSINT, misinformation,
+police perception, predictive alerting, geo/language breakdowns,
+cross-platform network analysis, reporting) in loose everyday language. This
+is normal, expected phrasing for this system — do NOT set
+needs_clarification=true just because the wording is informal, uses a
+severity synonym instead of a formal category name, or names a "zone"
+instead of a district. Normalize corrected_query so generate_sql can act on
+it directly:
+
+- State-wide scope: The entire database is already the Uttar Pradesh Police database (all 75 districts). If the user query includes "UP", "Uttar Pradesh", "all over UP", or "entire state", normalize `corrected_query` to state-wide subject inquiry (e.g., "protest in uttar pradesh" -> "protests and dharna across Uttar Pradesh") so downstream nodes know to fetch all records across the 75 districts of UP without applying any district filter or searching the literal words "in uttar pradesh" in titles.
+- Crime-severity synonyms ("sensational crime", "heinous crime", "shocking
+  crime", "high-profile crime", "brutal/gruesome murder") all describe a
+  crime-category filter, not an ambiguous request — keep them in
+  corrected_query as-is so generate_sql can match them against
+  broad_category/sub_category; do not ask the user to pick one synonym over
+  another.
+- "Zone" is a real, distinct concept (district → range → commissionerate →
+  zone → thana) from "district" — preserve whichever the user actually said
+  rather than silently substituting one for the other.
+- "Highest" vs "lowest" number of cases are opposite requests — preserve
+  exactly which one the user asked for; if they ask for both, keep both in
+  corrected_query.
+- Requests for "who is posting bad/negative content against [CM/minister/
+  official]" with platform/link/content detail are a specific, well-formed
+  request (VIP mention monitoring) — not something requiring clarification
+  just because no single person was named.
+- Requests to score or flag accounts as "bot"/"fake"/"coordinated" on a
+  numeric scale are answerable only by noting this dataset has no such
+  score — do not set needs_clarification=true for these either; pass the
+  request through as-is so the final answer can state that limitation
+  honestly rather than being blocked earlier in the pipeline.
+
+---
+
 ## Clarification Rules
 
 Set needs_clarification=true only when:
@@ -1647,8 +1880,29 @@ No explanation.
     except Exception as e:
         print(f"⚠️ query_rewriter_node: could not parse JSON ({e}) — falling back")
 
+    # ── Hashtag/mention wording override (deterministic) ───────────────────
+    # Belt-and-braces on top of the Job 0 prompt instruction above: even if
+    # the model still asked for clarification anyway, never let "hash"/
+    # "mentions"/"tags" wording dead-end in a clarification loop. Normalize
+    # corrected_query into literal '#' form so downstream nodes
+    # (check_query_manager, generate_sql's '#' guard) recognize it exactly
+    # like a user-typed '#' reference.
+    if hashtag_intent_detected:
+        if needs_clarification:
+            add_trace("query_rewriter",
+                       output="[hashtag intent] overriding model's needs_clarification=true — "
+                              "hash/mentions/tags wording is a known pattern, not ambiguous")
+        needs_clarification = False
+        clarification_message = ""
+        if "#" not in corrected_query:
+            corrected_query = (
+                f"{corrected_query} (#{hashtag_intent_term})" if hashtag_intent_term
+                else f"{corrected_query} (#TRENDING_HASHTAGS_TODAY)"
+            )
+
     add_trace("query_rewriter", user_query=query, prompt=prompt,
-             output=f"corrected_query={corrected_query}; rewrite_context={rewrite_context or '(none)'}; explain={explain_request}")
+             output=f"corrected_query={corrected_query}; rewrite_context={rewrite_context or '(none)'}; explain={explain_request}"
+                    + (f"; hashtag_intent_term={hashtag_intent_term or '(trending/general)'}" if hashtag_intent_detected else ""))
              
     # Extract resolved topic reference — only trust it if it matches a real ID
     # from this turn's actual SQL results. The LLM is instructed to return ""
@@ -1672,7 +1926,9 @@ No explanation.
         "rewrite_context": rewrite_context,
         "needs_clarification": needs_clarification,
         "explain_request": explain_request,
-        "resolved_topic_reference": resolved_topic_id
+        "resolved_topic_reference": resolved_topic_id,
+        "hashtag_intent_detected": hashtag_intent_detected,
+        "hashtag_intent_term": hashtag_intent_term,
     }
     if needs_clarification:
         result["answer"] = clarification_message
@@ -1695,9 +1951,9 @@ No explanation.
     if explain_request:
         result["answer"] = explain_answer
 
-    # ── Voice entity grounding ────────────────────────────────
+    # ── Voice entity grounding (Phase 5) ────────────────────────────────
     # Only for voice-originated turns (input_source == "voice", set by
-    # server.py from ChatRequest.input_source ), and only if
+    # server.py from ChatRequest.input_source — see Phase 1), and only if
     # the LLM's own needs_clarification/explain_request didn't already
     # claim this turn. Cross-checks extracted_entities against real DB
     # values before they're treated as fact by table_selector/generate_sql.
@@ -1863,17 +2119,49 @@ Treat these as continuation commands when previous context exists:
 Never treat them as independent queries if a previous subject exists.
 
 
-### 3. Preserve previous constraints
+### 3. Preserve previous constraints — ONLY for the SAME subject
 
-Carry forward all previous filters unless the user changes them:
+Carry forward previous filters (district, date range, category, incident
+type, topic, platform, sorting requirement) ONLY when the LATEST message is
+clearly a continuation, refinement, or follow-up of the SAME
+subject/investigation as PREVIOUS SUCCESSFUL QUERY CONTEXT — e.g. it's a
+short follow-up (see Rule 2), it only changes one attribute (see Rule 4), or
+it explicitly references "this"/"that"/the previous result.
 
-- district
-- date range
-- category
-- incident type
-- topic
-- platform
-- sorting requirement
+Do NOT carry forward ANY previous filter when the LATEST message introduces
+a new, unrelated subject, incident, or category that does not reference the
+previous query at all — treat it as a fresh, unconstrained request instead,
+even if a PREVIOUS SUCCESSFUL QUERY CONTEXT exists from earlier in the
+conversation. A change of subject silently inheriting an old district/date
+range/category is a bug, not a feature — never do it.
+
+Example (do NOT carry forward):
+
+Previous query:
+"viral topics of Lucknow last week"
+
+User:
+"any bad words about the ministers of UP"
+
+CORRECT Output:
+"Any bad words/negative posts about ministers of UP." (no district or date
+range carried forward — this is a new, unrelated subject)
+
+WRONG Output:
+"Any bad words about the ministers of UP in Lucknow last week." (silently
+inherited an unrelated previous filter)
+
+Example (broadening scope — drop district filter):
+
+Previous query:
+"show murder cases in Lucknow"
+
+User:
+"what about all over UP?"
+
+CORRECT Output:
+"Show murder cases across all of Uttar Pradesh." (The district filter MUST be 
+dropped because the scope expanded to the entire state).
 
 
 ### 4. Attribute changes
@@ -2434,6 +2722,21 @@ Output ONLY a valid JSON object:
     # covers. Internal DB always outranks any external source: only fall
     # through to DuckDuckGo grounding when the internal check comes back
     # empty too.
+    # Hashtag/mention wording (see query_rewriter_node) already resolved this
+    # turn's intent deterministically — force has_table_topic=true and skip
+    # the unresolved-short-form check entirely, since a marker like
+    # "#TRENDING_HASHTAGS_TODAY" would otherwise get misread as a bare
+    # unrecognized acronym and re-trigger a clarification question.
+    if state.get("hashtag_intent_detected"):
+        add_trace("check_query_manager", user_query=original_query,
+                  output="[hashtag intent] forcing has_table_topic=true, skipping unresolved-short-form check")
+        return {
+            "is_query_correct": True,
+            "has_table_topic": True,
+            "is_relationship_query": is_relationship_query,
+            "relationship_entities": relationship_entities,
+        }
+
     candidate_term = _find_unresolved_short_form(standalone_query, set(state.get("duck_resolved_terms", [])))
     if candidate_term:
         recycle_rows = await asyncio.to_thread(_fetch_recycle_search_entries)
@@ -2844,6 +3147,19 @@ STRICT RULES:
 - Maximum 25 terms. Quality over quantity — a short, precise list beats a long, noisy one.
 - If the query has no specific named topic/entity (e.g. it's a plain count or dashboard
   request), return an empty list.
+- A broad category/incident-type word (e.g. "protest", "crime", "riot", "murder",
+  "accident") is NOT a specific named topic/entity, even when combined with a place name
+  ("protest in uttar pradesh", "crime in Lucknow"). Do NOT fabricate compound phrases like
+  "up protest", "uttar pradesh riot", "protest march up" — these are not real name
+  variants, nobody writes post titles that way, and they will never match real data.
+  For these broad/generic queries, return an empty list; the category/keyword filters
+  built elsewhere in the pipeline already cover the generic subject term.
+
+BAD example — do NOT do this (query "protest in uttar pradesh" has no specific named
+incident — "protest" is a category, "uttar pradesh" is the whole state, not a real place a
+post title would combine it with):
+{{"combination_terms": ["protest in uttar pradesh", "up protest", "uttar pradesh protest", "uttar pradesh riot", "up demonstration"]}}
+→ correct output is an empty list: {{"combination_terms": []}}
 
 GOOD example — topic "Jauhar University":
 {{"combination_terms": ["Jauhar University", "Mohammad Ali Jauhar University", "जौहर यूनिवर्सिटी", "मोहम्मद अली जौहर विश्वविद्यालय", "जौहर", "जोहर", "Johar", "Jouhar", "मोहम्मद अली जौहर", "आजम खान", "Azam Khan", "JauharUniversity", "SaveJauharUniversity"]}}
@@ -3404,6 +3720,14 @@ Example:
 [12345] A robbery was reported near Hazratganj on 12 June 2025.
 [67890] Two individuals were arrested for illegal arms possession.
 
+12a. If the rows include author/username, platform (post_bank_core_source),
+a post URL, and post text — and the user's question is about WHO posted
+something (e.g. negative/critical posts against an official) — state, per
+item: the author name/handle, the platform, the link (only if the URL field
+is actually present and non-empty; if it is empty say "link not available",
+never invent one), and what they actually posted. Do not collapse this into
+just a count of how many posts exist.
+
 13. If the user requests all matching incidents or posts, include every relevant item.
 14. Otherwise, combine similar information into a concise response without repetition.
 15. Do not output duplicate ids.
@@ -3503,6 +3827,10 @@ Strict Rules:
 11. If the user asks for a specific field or detail, provide only that detail along with minimum required context.
 12. If the user asks for a summary, provide a concise summary containing the important facts only.
 13. If the user asks for a list, provide only the matching items.
+13a. If the extracted information includes an author/handle, platform, and
+link for a "who posted this" style question, preserve that structure per
+item (author — platform — link if present — what they posted); do not
+compress it down to a bare count.
 14. Do not add explanations about your analysis process.
 15. If the extracted information does not answer the user's question, return an empty string.
 
@@ -3614,6 +3942,22 @@ REASONING RULES:
    - If NEAR-MATCH CONTENT is available, describe it only as possible related content requiring human review.
    - Never convert near-match content into counts or confirmed findings.
 
+5a. For ONE OR A FEW results (TOTAL ROWS is 1-5):
+   - You MUST restate the actual field values present in those rows — topic
+     title/name, category, district/zone, date, counts, status, or any other
+     column that is actually populated — directly in your reasoning.
+   - It is NEVER acceptable to say only "exactly N matching item(s) was/were
+     found" or "no additional details are available" when the row itself
+     contains data you have not repeated. The row IS the additional detail —
+     if it has a title, category, or date, say what that title/category/date
+     is.
+   - Only say details are unavailable if the relevant column in the actual
+     row is genuinely NULL/empty — never say it because you chose to
+     summarize instead of stating the value.
+   - This applies even when the result is a single topic-level row with no
+     joined post text — a topic row still carries its own title, category,
+     district, and counts, and those must be surfaced, not withheld.
+
 6. Highlight useful observations only when supported by data:
    - dominant categories
    - high engagement
@@ -3652,6 +3996,25 @@ async def answer_node(state: State) -> dict:
     rows_preview = json.dumps(rows[:20], default=str, ensure_ascii=False)
     intent = state.get("query_intent", "count")
 
+    # ── Pagination phrasing note ─────────────────────────────────────────
+    pagination_note = ""
+    if state.get("is_pagination_request"):
+        if state.get("pagination_exhausted"):
+            pagination_note = (
+                "\nNOTE: The user asked for more results ('show more'/'next N'), but "
+                "there are no additional rows left — everything matching the original "
+                "query has already been shown in earlier turns. Tell the user there are "
+                "no more results to show, in the style of 'that's all N results' rather "
+                "than implying the search itself found nothing.\n"
+            )
+        else:
+            pagination_note = (
+                f"\nNOTE: This is a 'show more'/'next N' continuation of the previous "
+                f"result list. DATA ROWS below are the NEXT {len(rows)} additional rows "
+                f"(not a repeat of what was already shown) — present them as continuing "
+                f"the previous list, don't reintroduce the topic from scratch.\n"
+            )
+
     if state.get("relationship_search_done"):
         feedback_block = ""
         if state.get("answer_feedback"):
@@ -3689,7 +4052,7 @@ Using the EXTRACTED CONTEXT below, write a clear, helpful, plain-language answer
 - If the user asked in Hindi, reply in Hindi. Otherwise reply in English.
 - Use ONLY the provided extracted context.
 - Never show raw SQL to the user.
-
+{pagination_note}
 USER QUERY: {query}
 EXTRACTED CONTEXT: {validated_sql_context}
 
@@ -3719,12 +4082,19 @@ clear, helpful, plain-language answer for the user.
 - If the user asked in Hindi, reply in Hindi. Otherwise reply in English.
 - Include specific numbers, names, and dates from the data.
 - If there are many rows, summarize the key findings.
+- If TOTAL ROWS is 1-5, you MUST state the actual field values from those
+  rows (title/name, category, district/zone, date, counts, status, etc.) as
+  the core of your answer. Do NOT reply with only "a matching item was
+  found" or "no additional details are available" — if REASONING or DATA
+  ROWS already contains the details, put them in the answer. Only say a
+  detail is unavailable when the corresponding field is genuinely empty in
+  DATA ROWS, never as a substitute for stating a value that IS present.
 - If TOTAL ROWS is 0 and NEAR-MATCH CONTENT is provided below, clearly state
   that no exact database match was found, then list the near-match content as
   possibly-related leads worth a human review — never state them as a
   confirmed count.
 - Never show raw SQL to the user.
-
+{pagination_note}
 USER QUERY: {query}
 REASONING: {reasoning}
 DATA ROWS (first 20): {rows_preview}
@@ -4265,19 +4635,22 @@ If multiple concepts are requested, include both English and Hindi variants for 
 
 ## Mandatory District Filter
 
-Apply district filtering only when the user requests district/location-based information.
+## CRITICAL CONCEPT: THE DATABASE IS ALREADY UTTAR PRADESH (ALL 75 DISTRICTS)
 
-Default district:
-Lucknow
+The entire database is exclusively the UP Police monitoring system. Every single row in `topic` and `analyzed_data` belongs to Uttar Pradesh.
+There is NO district named "Uttar Pradesh" or "UP".
+The `primary_districts` and `primary_district` columns contain ONLY individual district names (such as "Lucknow", "Varanasi", "Meerut", "Agra", "Kanpur", "Bareilly", etc.).
 
-However, do NOT blindly add Lucknow filtering.
+Therefore, when a user mentions "in UP", "in Uttar Pradesh", "all over UP", or "entire state":
+1. **NEVER filter by `district = 'UP'` or `primary_districts LIKE '%UP%'` or `primary_district LIKE '%Uttar Pradesh%'`** — these will match 0 rows.
+2. **NEVER search the literal text phrase `'in uttar pradesh'` or `'in UP'` inside `topic_title` or `input_text`** (e.g. NEVER do `topic_title LIKE '%protest in uttar pradesh%'` or `input_text LIKE '%crimes in UP%'`). This also applies to any raw English category phrase (e.g. `topic_title LIKE '%crimes all over the UP%'`) — topic titles and posts are written in Hindi/Devanagari, not English, so an English phrase match will also return 0 rows.
+3. **Strip the state name and query only the underlying subject across all 75 districts without any district filter, using the `broad_category`/`sub_category` taxonomy column together with the Hindi wording**:
+   - For "protest in uttar pradesh" -> Query: `(t.broad_category LIKE '%PROTEST%' OR t.topic_title LIKE '%प्रदर्शन%' OR t.topic_title LIKE '%धरना%' OR t.topic_title LIKE '%आंदोलन%')` (with NO district filter).
+   - For "crimes in UP" -> Query: `(t.broad_category LIKE '%CRIME%' OR t.topic_title LIKE '%अपराध%' OR t.topic_title LIKE '%हत्या%' OR t.topic_title LIKE '%लूट%')` (with NO district filter).
+   - For "accidents in UP" -> Query: `(t.broad_category LIKE '%ACCIDENT%' OR t.topic_title LIKE '%हादसा%' OR t.topic_title LIKE '%दुर्घटना%')` (with NO district filter).
+   - For "viral topics in UP today" -> Query: `DATE(t.created_at) = CURDATE() ORDER BY t.total_no_of_post DESC` (with NO district filter).
 
-Use district filters only for:
-
-- topic queries
-- incident queries
-- post/content queries
-- district statistics
+Apply district filtering only when the user requests district/location-based information (i.e. the user names a specific district, or otherwise asks for a district-level breakdown). Do NOT apply any default/fallback district when none is named — see the STATE-WIDE QUERIES rule above and in "District Filtering Examples" below.
 
 
 ## Topic Primary District Rule
@@ -4343,6 +4716,7 @@ Rules:
 - For topic queries, compare only the first JSON array element.
 - For analyzed_data queries, use `primary_district` directly.
 - If the user asks statewide, category, profile, account, taxonomy, or platform questions, do NOT add district filtering.
+- **STATE-WIDE QUERIES (CRITICAL):** If the user mentions "UP", "Uttar Pradesh", "all over UP", "entire state", or implies all 75 districts, you MUST completely omit the district column from the `WHERE` clause. Do NOT attempt to filter by `district = 'UP'` or `primary_districts LIKE '%UP%'`.
 
 
 Never add district filtering for:
@@ -4356,6 +4730,7 @@ Never add district filtering for:
 - broad_category
 - sub_category
 - category_handle_master
+
 ---
 
 ## Limits
@@ -4524,19 +4899,129 @@ If the user says:
 
 after requesting a viral/trending topic, return all matching posts for the identified viral title rather than the grouped summary.
 
+---
+
+## Domain Query Pattern Library
+
+The monitored domains span 10 intelligence areas (law & order / public-order
+unrest, women's safety, caste-related monitoring, crime & OSINT,
+misinformation, police perception & accountability, predictive alerting,
+geo/language breakdowns, cross-platform/network analysis, and reporting).
+Users describe these in plain, sometimes loose language. Map that language to
+the documented schema using the worked patterns below — do not invent new
+columns, tables, or a dedicated "domain module" concept; every one of these
+resolves to the same tables already documented above.
+
+### Pattern A — Category + rolling time-window COUNT
+Example: "no of topics in law and order which is sensational crime and high
+order category from the last week"
+- Table: `topic` (topic-level count, not individual posts).
+- Category: match against `broad_category` / `sub_category` (JSON arrays —
+  use `JSON_TABLE` or one `LIKE` per synonym; terms like "sensational",
+  "high-profile", "heinous", "shocking", "brutal" are natural-language
+  synonyms for a crime-severity sub-category, not separate literal category
+  names — OR them together as LIKE conditions against sub_category/broad_category).
+- Time: resolve "pichle ek hafte" / "last week" against `created_at` (or
+  `post_bank_post_timestamp` when the count is post-level).
+- Output: `COUNT(*)`, optionally `GROUP BY` the matched category so the
+  answer can name which sub-categories contributed.
+
+### Pattern B — Zone-level category rollup, any time period
+Example: "zones -> heinous crimes related to child, women, violence against
+animals or any person -> any time period"
+- "Zone" is NOT a column on `topic`/`analyzed_data` — it only exists on
+  `thana_matrix` (district → range → commissionerate → zone → thana). Resolve
+  district from `topic.primary_districts[0]` / `analyzed_data.primary_district[0]`,
+  then JOIN `thana_matrix` on that district to get `zone`.
+- "Heinous crimes related to child/women/animals/any person" are several
+  sub_category synonyms (e.g. child abuse, crime against women, cruelty to
+  animals, murder/assault) — match each with its own `LIKE`/`JSON_TABLE`
+  condition, OR'd together; do not require all of them simultaneously.
+- "Any time period" means do NOT add a date filter unless the user later
+  narrows it.
+- GROUP BY zone so the answer can be broken down zone-wise.
+
+### Pattern C — District-wise ranking (highest/lowest) with sentiment context
+Example: "district -> crime wise -> highest/lowest number of cases
+registered and any serious discussions on them and its effect on society,
+sentiments"
+- Case counts: `GROUP BY` district (via `primary_districts[0]` /
+  `primary_district[0]`) and category, `COUNT(*)`, then `ORDER BY` count
+  `DESC` (highest) or `ASC` (lowest) — "highest" and "lowest" are two
+  different orderings the user may ask for in the same conversation, resolve
+  from their exact wording.
+- "Serious discussions ... effect on society, sentiments": this is a second,
+  related question, not a filter on the count query. Prefer `topic.sentiment_stats`
+  / `topic.emotional_stats` (already pre-aggregated per topic) over
+  re-aggregating `analyzed_data.sentiment_label` when the question is scoped
+  to specific topics; fall back to `analyzed_data.sentiment_label` counts when
+  the question needs post-level sentiment for a district generally.
+
+### Pattern D — VIP / official negative-mention tracking with source detail
+Example: "bad words / negative posts against UP CM, ministers, officials,
+or any member, by people/media/influencers, via post or video, for any time
+period — show the people and their platform where they posted, with the
+link if available, and what they posted."
+- This is the standard tag/mention pattern: JOIN `monitor_profiles` to
+  `analyzed_data` via the documented
+  `LOWER(a.mention_ids_extracted) LIKE CONCAT('%', LOWER(TRIM(LEADING '@' FROM mp.user_name)), '%')`
+  pattern, filtered to `mp.category` values for CM/ministers/officials.
+- Add `a.sentiment_label = 'Negative'` (this table's rule already covers
+  abusive/critical wording — do not invent a separate "bad words" column).
+- Return, per row: `post_bank_author_name`, `post_bank_author_username`,
+  `post_bank_core_source` (the platform), `post_bank_post_url` (the link —
+  may be NULL, that's expected, never fabricate one), and `input_text` (what
+  they actually posted). This is exactly the column set answer_node needs to
+  present "who posted what, on which platform, with a link."
+- `process_status = 'SKIP'` rows in `monitor_profiles` are official/verified
+  handles being monitored FOR mentions, not accounts to exclude from being
+  the *author* of a negative post — that flag only affects which monitored
+  handles count as "official" when disambiguating a mention target.
+
+### Pattern E — "Is this account a bot" / coordinated-behavior scoring
+Example: "flag posts/accounts with possible bot behavior, score 1-5."
+- **There is no `is_bot`, `bot_score`, or coordinated-behavior column or
+  model anywhere in this schema.** Do NOT invent one, and do NOT have the
+  final answer present a fabricated 1-5 score as if it were a stored,
+  computed value — that would be presenting a guess as a database fact.
+- If the user asks for this, the honest answer states plainly that this
+  dataset has no dedicated bot-detection score. If the user separately asks
+  for the underlying *signals* a human analyst would use, you may surface
+  documented proxy fields — `post_users.followers_count`,
+  `following_count`, `posts_count`, `is_verified`, `account_status`,
+  `created_at` — but the answer must clearly label these as raw account
+  signals for manual review, never as a computed bot-likelihood score.
+
 """
 
 
-def generate_sql(question: str, previous_sql: str = "", feedback: str = "", selected_tables: list = None) -> str:
-    """Ask the vLLM model to translate a natural-language question into a MySQL SELECT statement."""
-    
-    user_content = question
-    if selected_tables:
-        user_content += f"\n\nIMPORTANT: You MUST ONLY use the following tables: {', '.join(selected_tables)}.\nDO NOT hallucinate tables like 'posts' or 'users'. If a table is not in this list, DO NOT USE IT."
+def _call_sql_finetuned_backend(user_content: str) -> str:
+    """Calls the dedicated fine-tuned MySQL-LoRA vLLM server (see
+    SQL_VLLM_* config near the top of the file). Raises on any failure —
+    callers are expected to catch and fall back to _call_sql_general_backend.
+    """
+    response = requests.post(
+        f"{SQL_VLLM_BASE_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {SQL_VLLM_API_KEY}"},
+        json={
+            "model": SQL_VLLM_MODEL_NAME,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": 0,
+            "max_tokens": 1024,
+            "stream": False,
+        },
+        timeout=SQL_VLLM_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
 
-    if previous_sql and feedback:
-        user_content += f"\n\n===========================\nPREVIOUS SQL ATTEMPT:\n```sql\n{previous_sql}\n```\n\nFEEDBACK / REASON IT FAILED:\n{feedback}\n\nPlease fix the query based on this feedback."
 
+def _call_sql_general_backend(user_content: str) -> str:
+    """Calls the original general-purpose vLLM backend (VLLM_BASE_URL) —
+    the pre-existing SQL-generation path, kept as the fallback."""
     response = requests.post(
         f"{VLLM_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {VLLM_API_KEY}"},
@@ -4551,7 +5036,36 @@ def generate_sql(question: str, previous_sql: str = "", feedback: str = "", sele
         timeout=120,
     )
     response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
+    return response.json()["choices"][0]["message"]["content"]
+
+
+def generate_sql(question: str, previous_sql: str = "", feedback: str = "", selected_tables: list = None) -> str:
+    """Ask an LLM to translate a natural-language question into a MySQL
+    SELECT statement.
+
+    Tries the dedicated fine-tuned MySQL-LoRA backend first (smaller/faster,
+    trained specifically on this SQL-generation task — see SQL_VLLM_* config
+    near the top of the file), and falls back to the original general-purpose
+    vLLM backend if that call fails or is disabled via
+    SQL_GEN_USE_FINETUNED_MODEL=false. This keeps the swap low-risk: an
+    unreachable or misbehaving fine-tuned server can never break SQL
+    generation, it just silently reverts to the pre-existing path.
+    """
+    user_content = question
+    if selected_tables:
+        user_content += f"\n\nIMPORTANT: You MUST ONLY use the following tables: {', '.join(selected_tables)}.\nDO NOT hallucinate tables like 'posts' or 'users'. If a table is not in this list, DO NOT USE IT."
+
+    if previous_sql and feedback:
+        user_content += f"\n\n===========================\nPREVIOUS SQL ATTEMPT:\n```sql\n{previous_sql}\n```\n\nFEEDBACK / REASON IT FAILED:\n{feedback}\n\nPlease fix the query based on this feedback."
+
+    if SQL_GEN_USE_FINETUNED_MODEL:
+        try:
+            content = _call_sql_finetuned_backend(user_content)
+            return _extract_sql(content)
+        except Exception as exc:
+            print(f"⚠️ SQL fine-tuned backend failed ({exc}) — falling back to general vLLM backend.")
+
+    content = _call_sql_general_backend(user_content)
     return _extract_sql(content)
 
 
@@ -4704,6 +5218,35 @@ def _temporal_condition_for_query(query: str, col: str):
     return None
 
 
+# ── Pagination OFFSET injection (deterministic) ─────────────────────────────
+# Reuses the previous turn's exact SQL (same WHERE/ORDER BY) with a rewritten
+# trailing LIMIT/OFFSET, instead of asking the LLM to regenerate the query —
+# far more reliable than hoping a regenerated query preserves identical
+# filters/ordering turn to turn. See matrix-app-report-pipeline pagination fix.
+_LIMIT_TAIL_RE = re.compile(r"\bLIMIT\s+(\d+)(?:\s+OFFSET\s+(\d+))?\s*;?\s*$", re.IGNORECASE)
+
+_DEFAULT_PAGINATION_BATCH_SIZE = 100  # matches this file's documented default LIMIT convention
+
+
+def _extract_limit(sql: str):
+    """Returns the LIMIT value at the end of `sql`, or None if there isn't one."""
+    m = _LIMIT_TAIL_RE.search(sql.strip())
+    return int(m.group(1)) if m else None
+
+
+def _strip_limit_offset(sql: str) -> str:
+    """Removes a trailing LIMIT/LIMIT...OFFSET clause, if present."""
+    sql = sql.strip().rstrip(";").strip()
+    return _LIMIT_TAIL_RE.sub("", sql).strip()
+
+
+def _inject_limit_offset(sql: str, limit: int, offset: int) -> str:
+    """Rewrites `sql`'s trailing LIMIT/OFFSET clause to the given values,
+    preserving everything else (WHERE/ORDER BY/etc.) untouched."""
+    base = _strip_limit_offset(sql)
+    return f"{base} LIMIT {limit} OFFSET {offset};"
+
+
 def _inject_temporal_filter(sql: str, query: str) -> str:
     """Injects a date filter if the user asked for one but the LLM forgot it."""
     if _SQL_TEMPORAL_FILTER_PATTERN.search(sql):
@@ -4784,6 +5327,32 @@ async def generate_sql_node(state: State) -> dict:
     """Wraps generate_sql() as a graph node."""
     query = state["query"]
 
+    # ── Hashtag/mention wording re-normalization (defense in depth) ────────
+    # query_rewriter_node already appended a literal '#...' marker for
+    # natural-language hashtag wording ("hash today", "mentions of X"), but
+    # query_manager_node rewrites the query through its own LLM call in
+    # between, which could drop free-text annotations like that. Re-apply it
+    # here from the carried state flags so this guard and generate_sql()'s
+    # prompt still see it even if query_manager_node's rewrite stripped it.
+    trending_hashtag_instruction = ""
+    if state.get("hashtag_intent_detected") and "#" not in query:
+        hashtag_term = state.get("hashtag_intent_term", "")
+        if hashtag_term:
+            query = f"{query} (#{hashtag_term})"
+        else:
+            query = f"{query} (#TRENDING_HASHTAGS_TODAY)"
+    if "#TRENDING_HASHTAGS_TODAY" in query:
+        trending_hashtag_instruction = (
+            "\n\nTRENDING HASHTAGS REQUEST: The user wants the MOST-USED hashtags/"
+            "mentions for the requested time period, not a search for one specific "
+            "hashtag. Build a query that groups by hashtag/mention "
+            "(hashtags.hashtag_keyword / hashtag_hindi_keyword, or the documented "
+            "mention column) and counts occurrences, ordered by count DESC, "
+            "filtered to the requested time period. Do NOT treat "
+            "'TRENDING_HASHTAGS_TODAY' as a literal hashtag to search for — it is "
+            "a marker meaning 'show the top hashtags', not real text."
+        )
+
     # ── Deterministic '#' guard (Phase 2) ───────────────────────────────
     # '#' means hashtag/mention in this dataset. If every '#' in the query
     # is empty or has nothing but filler words after it, don't spend an LLM
@@ -4795,6 +5364,24 @@ async def generate_sql_node(state: State) -> dict:
         add_trace("generate_sql", user_query=query,
                    output="Bare/incomplete '#' reference — skipped LLM call, returned documented fallback.")
         return {"sql": fallback_sql}
+
+    # ── Pagination continuation (deterministic, no LLM) ─────────────────────
+    # query_rewriter_node already confirmed this turn is a "show more"/
+    # "next N" follow-up AND that a previous SQL result exists to continue.
+    # Reuse that exact SQL's WHERE/ORDER BY and just advance the OFFSET —
+    # regenerating via the LLM here would risk a subtly different query
+    # (different filters/ordering) that silently breaks the "next batch"
+    # guarantee.
+    if state.get("is_pagination_request") and state.get("last_executed_sql"):
+        prior_sql = state["last_executed_sql"]
+        prior_offset = state.get("last_sql_offset", 0) or 0
+        requested_count = state.get("pagination_requested_count") or 0
+        batch_size = requested_count or _extract_limit(prior_sql) or _DEFAULT_PAGINATION_BATCH_SIZE
+        paged_sql = _inject_limit_offset(prior_sql, batch_size, prior_offset)
+        add_trace("generate_sql", user_query=query,
+                   output=f"[pagination] reused previous SQL with LIMIT {batch_size} OFFSET {prior_offset}: {paged_sql[:500]}")
+        return {"sql": paged_sql, "applied_pagination_offset": prior_offset}
+
     resolved_topic_id = state.get("resolved_topic_reference", "")
     
     # If this is a retry from sql_judge, pass the previous SQL and feedback
@@ -4832,7 +5419,7 @@ async def generate_sql_node(state: State) -> dict:
         selected_tables = state.get("selected_tables", [])
         sql = await asyncio.to_thread(
             generate_sql,
-            query + topic_instruction + keyword_instruction,
+            query + topic_instruction + keyword_instruction + trending_hashtag_instruction,
             previous_sql,
             feedback,
             selected_tables
@@ -4880,8 +5467,15 @@ Rules (apply in order):
    "what does the post say", "tell me the details of these posts", "report", "summary" —
    classify as: summary
 
-2. For ALL other questions — including generic listing or search queries like
-   "In which post is DGP UP tagged?", "which posts talk about X", "who is mentioned in the posts",
+2. If the user asks WHO posted/said something (negative posts, bad words,
+   accusations, criticism) about a person/official/VIP and wants to know the
+   poster's identity, platform, link, or what was actually written/posted —
+   e.g. "who is posting bad words against the CM", "show people who criticized
+   minister X with their platform and link" — classify as: summary
+   (this needs per-post identity + content detail, not just a count).
+
+3. For ALL other questions — including generic listing or search queries like
+   "In which post is DGP UP tagged?", "which posts talk about X",
    "posts of Lucknow today", "posts from Delhi", "posts about crime",
    "show posts for Mumbai", "posts today", "recent posts of X" —
    classify as: count
@@ -4968,13 +5562,21 @@ async def execute_sql_node(state: State) -> dict:
             except Exception as exc:
                 add_trace("execute_sql", output=f"English/Hinglish retry failed: {exc}")
 
-        # Save to session log and last SQL context
+        # Save to session log and last SQL context — capped to the most
+        # recent entries so a long-running chat_id's Mongo doc doesn't grow
+        # unbounded now that session_log is persisted turn-to-turn (see
+        # matrix-app-report-pipeline pagination fix). _search_related_log_points
+        # only ever looks at the most recent 5 anyway, so this cap doesn't
+        # change behavior, just bounds storage.
+        _SESSION_LOG_MAX_ENTRIES = 50
         session_log = state.get("session_log", [])
         session_log.append({
             "query": state["query"],
             "sql": sql,
             "row_count": len(rows)
         })
+        if len(session_log) > _SESSION_LOG_MAX_ENTRIES:
+            session_log = session_log[-_SESSION_LOG_MAX_ENTRIES:]
         original_query = state.get("original_query", state["query"])
         last_sql_context = f"Previous User Query: {original_query}\nStandalone Query: {state['query']}\nSQL Executed:\n{sql}\nReturned {len(rows)} rows."
 
@@ -5016,6 +5618,16 @@ async def execute_sql_node(state: State) -> dict:
 
     add_trace("execute_sql",
              output=f"{len(rows)} rows; intent={query_intent}")
+
+    # ── Pagination bookkeeping ────────────────────────────────────────────
+    # applied_pagination_offset is only set by generate_sql_node's pagination
+    # branch (0 for every fresh, non-continuation query). The new cumulative
+    # offset — "how many rows of this result set have now been shown in
+    # total" — is what the NEXT "show more" continuation will OFFSET by.
+    applied_offset = state.get("applied_pagination_offset", 0) or 0
+    new_pagination_offset = applied_offset + len(rows)
+    pagination_exhausted = bool(state.get("is_pagination_request")) and len(rows) == 0
+
     # NOTE: last_sql_context/last_topic_ids/post_metadata must be returned here,
     # not set via `state[...] = ...` — LangGraph only persists what a node
     # returns, so a direct mutation of the `state` argument is silently
@@ -5029,6 +5641,10 @@ async def execute_sql_node(state: State) -> dict:
         "last_sql_context": last_sql_context,
         "last_topic_ids": topic_ids,
         "post_metadata": post_metadata,
+        "last_executed_sql": sql,
+        "last_sql_offset": new_pagination_offset,
+        "pagination_exhausted": pagination_exhausted,
+        "session_log": session_log,
     }
 
 
@@ -5036,42 +5652,49 @@ async def execute_sql_node(state: State) -> dict:
 # FALLBACK DECIDER NODE
 # =========================
 
+_RELATIONSHIP_QUERY_HINTS = (
+    "follow", "followers", "following", "connected", "network",
+    "related account", "linked to", "who follows", "mutual",
+)
+
+
 async def fallback_decider_node(state: State) -> dict:
     """
-    Decides whether a query that failed in MySQL should go to Qdrant (keyword_search)
-    to find specific topics/documents first, or directly to Neo4j (graph_query)
-    for structural graph traversal.
+    Deterministically decides whether a query that returned NO results from
+    MySQL should try Qdrant (keyword_search) first before Neo4j, or go
+    straight to Neo4j (graph_query).
+
+    This used to be an LLM call, but the graph wiring means BOTH routes
+    always end up at neo4j_search anyway (content_index_search's only
+    outgoing edge is straight into neo4j_search) -- so the model was never
+    choosing between two independent strategies, only whether the Qdrant
+    step ran first. That's a decision a keyword check can make just as
+    well, so this removes one full LLM call from every zero-row fallback
+    without changing what fallbackchecker (the actual accuracy gate on
+    this branch) ever sees.
     """
     query = state["query"]
-    feedback = state.get("fallback_feedback", "")
     retry_count = state.get("fallback_retry_count", 0)
     last_route = state.get("fallback_route", "")
-    
-    feedback_block = ""
-    if retry_count > 0 and feedback:
-        feedback_block = f"\nWARNING: You previously chose '{last_route}' but it FAILED with this feedback: {feedback}\nYou MUST choose the OTHER option this time!\n"
-    
-    prompt = f"""
-You are a router deciding how to handle a query that returned NO results from a standard SQL database.
-The query might be about specific keywords/documents, OR it might be about complex relationships.
 
-Query: "{query}"
-{feedback_block}
-We have two fallback options:
-1. "keyword_search" -> Use Qdrant vector DB. Use this if the user is asking about specific keywords, events, incidents, or text that needs to be matched against documents to find a 'topic_id'. Examples: "Who posted about the Kanwad Yatra?", "What is the URL for the Lucknow library fire?"
-2. "graph_query" -> Use Neo4j graph DB directly. Use this if the user is asking about broad relationships, paths, or network structures that do not rely on matching specific text content first. Examples: "Who follows who?", "How many accounts are connected to this user?"
+    is_relationship_query = any(h in query.lower() for h in _RELATIONSHIP_QUERY_HINTS)
 
-Respond with EXACTLY one word: either "keyword_search" or "graph_query".
-"""
-    decision = (await call_llm(prompt)).strip().lower()
-    
-    if "graph" in decision:
-        route = "graph_query"
+    if retry_count == 0:
+        # First attempt: relationship-flavored queries ("who follows who")
+        # skip straight to the graph; everything else tries
+        # content_index_search first so its topic_id hints are available
+        # to neo4j_search.
+        route = "graph_query" if is_relationship_query else "keyword_search"
     else:
-        route = "keyword_search"
-        
-    add_trace("fallback_decider", output=f"Route: {route}")
+        # Retry after a failed attempt: alternate strategy from last time —
+        # mirrors what the old LLM prompt's "you must choose the OTHER
+        # option" instruction did, just without a model call.
+        route = "graph_query" if last_route == "keyword_search" else "keyword_search"
+
+    add_trace("fallback_decider", output=f"Route: {route} (deterministic, retry={retry_count})")
     return {"fallback_route": route}
+
+
 
 
 # =========================
@@ -5453,6 +6076,14 @@ def _execute_decision(state: State) -> str:
     if not sql:
         return "judge"
 
+    # A pagination continuation ("show more") that legitimately ran out of
+    # rows is not a failed search — skip the Qdrant/Neo4j fallback chase
+    # (which would otherwise surface unrelated "similar data" for a request
+    # that was never about finding new content) and let answer_node phrase
+    # it plainly using the pagination_exhausted note.
+    if state.get("pagination_exhausted"):
+        return "judge"
+
     is_zero_result = False
     if not rows:
         is_zero_result = True
@@ -5665,6 +6296,8 @@ async def main():
     messages = []  # in-memory conversation history for this run
     session_log = [] # in-memory history of executed SQL and results
     last_topic_ids = []  # topic IDs from the most recent SQL result
+    last_executed_sql = ""  # exact SQL from the most recent turn, for "show more"/"next N" pagination
+    last_sql_offset = 0     # cumulative rows already shown for last_executed_sql's result set
     pending_keyword_confirmation = None  # set when ask_user/classification is waiting on a yes/no reply
 
     while True:
@@ -5701,6 +6334,8 @@ async def main():
             "last_sql_context": session_log[-1].get("sql", "") if session_log else "",
             "session_log": session_log,
             "last_topic_ids": last_topic_ids,
+            "last_executed_sql": last_executed_sql,
+            "last_sql_offset": last_sql_offset,
             "resolved_topic_reference": "",
             "post_metadata": {},
             "answer_feedback": "",
@@ -5732,6 +6367,11 @@ async def main():
         # Persist topic IDs from this turn for next turn's reference resolution
         if result.get("last_topic_ids"):
             last_topic_ids = result["last_topic_ids"]
+
+        # Persist pagination state for a possible "show more"/"next N" next turn
+        if result.get("last_executed_sql"):
+            last_executed_sql = result["last_executed_sql"]
+            last_sql_offset = result.get("last_sql_offset", 0)
 
         # Carry a pending ask_user/classification confirmation into the next turn
         pending_keyword_confirmation = result.get("pending_keyword_confirmation")

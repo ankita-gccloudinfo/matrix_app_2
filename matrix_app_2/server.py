@@ -156,6 +156,7 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
         existing_doc = await get_sessions_collection().find_one({"_id": chat_id})
         messages = existing_doc["messages"].copy() if existing_doc else []
     else:
+        existing_doc = None
         messages = []
     messages.append({"role": "user", "content": query})
     question_number = sum(1 for m in messages if m.get("role") == "user")
@@ -165,6 +166,21 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
     user_id = current_user["_id"] if current_user else None
 
     clear_trace()
+
+    # ── Turn-to-turn agent state (pagination / follow-up resolution) ───────
+    # query_rewriter_node/execute_sql_node in ollamaagent2.py read and write
+    # last_sql_context/last_topic_ids/session_log (existing follow-up
+    # resolution) and last_executed_sql/last_sql_offset (new — "show more"/
+    # "next N" pagination). None of these are part of `messages`, so they
+    # must be threaded through explicitly here rather than relying on the
+    # graph's own state (a fresh ainvoke() call every turn has no memory of
+    # the previous one — see matrix-app-report-pipeline pagination fix).
+    # This is stored on the SAME session doc common.routes._persist_chat_session
+    # already writes for `messages`, as sibling fields — kept local to this
+    # app's own request handler rather than changing that shared function's
+    # signature, since it's shared with other apps (see the common/ import
+    # note above).
+    agent_prior_state = existing_doc.get("agent_state", {}) if existing_doc else {}
 
     invoke_task = asyncio.create_task(agent_app.ainvoke({
         "query": query,
@@ -178,6 +194,11 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
         "chat_id": chat_id,
         "question_number": question_number,
         "input_source": chat_request.input_source or "text",
+        "last_sql_context": agent_prior_state.get("last_sql_context", ""),
+        "session_log": agent_prior_state.get("session_log", []),
+        "last_topic_ids": agent_prior_state.get("last_topic_ids", []),
+        "last_executed_sql": agent_prior_state.get("last_executed_sql", ""),
+        "last_sql_offset": agent_prior_state.get("last_sql_offset", 0),
     }))
 
     while not invoke_task.done():
@@ -207,6 +228,35 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
     ))
 
     asyncio.create_task(_persist_chat_session(chat_id, messages, user_id=user_id, user_name=user_name))
+
+    # Persist turn-to-turn agent state (pagination + existing follow-up
+    # resolution fields) as a sibling `agent_state` field on the same
+    # session doc, so the NEXT turn's query_rewriter_node/generate_sql_node
+    # can resolve "show more"/"next N" and other context follow-ups. `result`
+    # is the graph's full final state, so unchanged fields (e.g. a turn that
+    # never reached execute_sql_node, like a greeting) already carry forward
+    # whatever was passed in above rather than being wiped to empty.
+    #
+    # NOTE: get_sessions_collection().update_one(...) is a Motor call — it
+    # returns a Future-like awaitable, not a native coroutine, and
+    # asyncio.create_task() requires an actual coroutine object (raises
+    # "TypeError: a coroutine was expected, got <Future...>" otherwise).
+    # Wrapped in this async helper so create_task() gets a real coroutine,
+    # same as the existing _persist_chat_session(...) call above.
+    async def _persist_agent_state():
+        await get_sessions_collection().update_one(
+            {"_id": chat_id},
+            {"$set": {"agent_state": {
+                "last_sql_context": result.get("last_sql_context", ""),
+                "session_log": result.get("session_log", []),
+                "last_topic_ids": result.get("last_topic_ids", []),
+                "last_executed_sql": result.get("last_executed_sql", ""),
+                "last_sql_offset": result.get("last_sql_offset", 0),
+            }}},
+            upsert=True,
+        )
+
+    asyncio.create_task(_persist_agent_state())
 
     async def stream_answer():
         chunk_size = 5
