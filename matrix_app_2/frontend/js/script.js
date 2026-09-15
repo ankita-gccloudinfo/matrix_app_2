@@ -1811,6 +1811,18 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Store globally for feed
             window._lastSQLIds = metaData.sql_ids || [];
+
+            // "Show more" — fetches the NEXT batch of rows for this same SQL
+            // query directly (see POST /api/chat/more in server.py). This
+            // does NOT re-run the LangGraph agent or call any LLM: it reuses
+            // the exact executed SQL and advances OFFSET, so it's fast and
+            // returns real additional rows rather than a re-summarized
+            // answer capped to the first ~20 rows. Only shown when the
+            // answer's own text likely didn't already enumerate everything
+            // (i.e. when there's more data than a typical single answer lists).
+            if (metaData.sql_rows > 10 && currentChatId) {
+                appendShowMoreButton(contentDiv, currentChatId);
+            }
             
             if (metaData.sql_rows > 20 && window.settingsManager && window.settingsManager.isVizWithChatEnabled()) {
                 const networkBtn = document.getElementById('networkBtn');
@@ -1858,6 +1870,58 @@ document.addEventListener('DOMContentLoaded', () => {
             // this text input instead of its own mic.
             window.avatarSpeakIfActive(accumulated);
         }
+    }
+
+    // Appends a "Show more" button under an answer's result-count badge.
+    // Clicking it calls POST /api/chat/more, which re-executes the SAME SQL
+    // with the OFFSET advanced (no LLM call, no LangGraph re-run) and returns
+    // the next batch of raw rows formatted as plain text — appended directly
+    // under the existing answer rather than starting a whole new chat turn.
+    function appendShowMoreButton(contentDiv, chatId) {
+        const btn = document.createElement('button');
+        btn.textContent = 'Show more';
+        btn.style.cssText = "display: block; margin-top: 10px; padding: 6px 14px; background-color: var(--accent-color, #4f8ef7); color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;";
+
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = 'Loading…';
+            try {
+                const res = await fetch('/api/chat/more', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId }),
+                });
+                const data = await res.json();
+
+                if (!res.ok || data.error) {
+                    btn.textContent = data.error || 'Failed to load more.';
+                    return;
+                }
+                if (!data.rows_returned) {
+                    btn.textContent = 'No more results';
+                    btn.disabled = true;
+                    return;
+                }
+
+                const moreDiv = document.createElement('div');
+                moreDiv.style.cssText = "margin-top: 10px; white-space: pre-wrap; font-size: 14px;";
+                moreDiv.innerHTML = marked.parse(data.text || '');
+                btn.insertAdjacentElement('beforebegin', moreDiv);
+
+                if (data.has_more) {
+                    btn.disabled = false;
+                    btn.textContent = 'Show more';
+                } else {
+                    btn.textContent = 'No more results';
+                    btn.disabled = true;
+                }
+            } catch (e) {
+                console.error('Error loading more results', e);
+                btn.textContent = 'Failed to load more.';
+            }
+        });
+
+        contentDiv.appendChild(btn);
     }
 
     // Attaches the "Listen to response" speech-synthesis button to an AI message

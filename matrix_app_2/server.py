@@ -32,7 +32,10 @@ PROJECT_ID = "matrix_app"
 from common.project_config import apply_project_config
 apply_project_config(PROJECT_ID)
 
-from ollamaagent2 import graph as agent_app, call_llm, is_safe_sql, clear_trace, get_trace
+from ollamaagent2 import (
+    graph as agent_app, call_llm, is_safe_sql, clear_trace, get_trace,
+    execute_sql, _inject_limit_offset, _extract_limit,
+)
 from common.database.mongo import get_sessions_collection
 from database.mysql_db import get_district_counts, get_feed_posts, run_query, get_posts_by_ids
 from services.location import deduct_location, UP_DISTRICTS
@@ -272,6 +275,92 @@ async def chat_endpoint(chat_request: ChatRequest, http_request: Request, respon
         if header_name.decode().lower() == "set-cookie":
             stream_resp.raw_headers.append((header_name, header_value))
     return stream_resp
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# "Show more" pagination — deliberately NOT routed through agent_app.ainvoke().
+# The full LangGraph turn (query_manager -> check_query_manager -> table_selector
+# -> generate_sql -> sql_judge -> is_safe_sql -> execute_sql -> judge_and_reason/
+# llm_validator -> answer -> answer_checker) fires 5-7 LLM calls even when
+# generate_sql_node's own pagination shortcut reuses last_executed_sql verbatim
+# (see ollamaagent2.py's is_pagination_request branch) — the SQL text is reused,
+# but every OTHER node in the graph still re-runs. This endpoint instead reuses
+# the exact SQL + advances OFFSET directly and formats the new rows with no LLM
+# call at all, so clicking "Show more" is fast and returns real additional rows
+# instead of a second LLM-summarized answer that's capped to the first ~20 rows
+# (see judge_and_reason_node / answer_node's `rows[:20]` prompt truncation —
+# that cap is why a first answer for a 100-row result only ever narrates ~10 of
+# them and says "continuing with N more in the same format" instead of listing
+# them: the model past row 20 was never shown the data, and past row ~10 it
+# starts summarizing rather than enumerating, per instruction).
+class LoadMoreRequest(BaseModel):
+    chat_id: str
+    batch_size: Optional[int] = None  # None = reuse the batch size from the original SQL's LIMIT
+
+
+def _format_more_rows(rows: list, start_index: int) -> str:
+    """Deterministic (no-LLM) formatter for a pagination batch, mirroring the
+    numbered 'Topic ID / Title / Posts' shape already used for topic-style
+    listings when those columns are present, and falling back to a generic
+    key: value listing for any other row shape."""
+    lines = []
+    for i, row in enumerate(rows, start=start_index + 1):
+        topic_id = row.get("unique_topic_id") or row.get("topic_id")
+        title = row.get("topic_title") or row.get("title") or row.get("post_title")
+        if topic_id or title:
+            lines.append(f"{i}. Topic ID: {topic_id or '—'}")
+            if title:
+                lines.append(f"   Title: {title}")
+            for key in ("post_count", "posts", "count"):
+                if key in row and row[key] is not None:
+                    lines.append(f"   Posts: {row[key]}")
+                    break
+        else:
+            # Generic fallback for any other selected column shape.
+            field_str = " | ".join(f"{k}: {v}" for k, v in row.items() if v is not None)
+            lines.append(f"{i}. {field_str}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+@app.post("/api/chat/more")
+async def chat_more_endpoint(request: LoadMoreRequest):
+    """Returns the NEXT batch of rows for the last SQL query run in this chat,
+    without re-invoking the LangGraph agent. Pairs with a 'Show more' button in
+    the UI (see frontend/js/script.js, next to the 'Found N matching posts'
+    badge) instead of requiring the user to type 'show more N'."""
+    existing_doc = await get_sessions_collection().find_one({"_id": request.chat_id})
+    agent_state = existing_doc.get("agent_state", {}) if existing_doc else {}
+    prior_sql = agent_state.get("last_executed_sql", "")
+    prior_offset = agent_state.get("last_sql_offset", 0) or 0
+
+    if not prior_sql:
+        return JSONResponse(
+            {"error": "Nothing to paginate yet — ask a question first."},
+            status_code=400,
+        )
+
+    batch_size = request.batch_size or _extract_limit(prior_sql) or 100
+    paged_sql = _inject_limit_offset(prior_sql, batch_size, prior_offset)
+
+    try:
+        rows = await asyncio.to_thread(execute_sql, paged_sql)
+    except Exception as e:
+        print(f"Error paginating SQL: {e}")
+        return JSONResponse({"error": "Failed to load more results."}, status_code=500)
+
+    new_offset = prior_offset + len(rows)
+    await get_sessions_collection().update_one(
+        {"_id": request.chat_id},
+        {"$set": {"agent_state.last_sql_offset": new_offset}},
+    )
+
+    return {
+        "text": _format_more_rows(rows, prior_offset) if rows else "",
+        "rows_returned": len(rows),
+        "offset": new_offset,
+        "has_more": len(rows) == batch_size,  # a full batch suggests more may follow
+    }
 
 
 def _resolve_location_sync(lat: float, lng: float):

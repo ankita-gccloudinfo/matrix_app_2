@@ -4768,6 +4768,83 @@ NEVER select an unaggregated text column alongside a `GROUP BY` clause, otherwis
 
 ---
 
+## Count / Total / "How Many" Queries — Critical Anti-Hallucination Rule
+
+Trigger phrases include (not exhaustive — match the intent, not just the exact
+words): "count", "total", "total number of", "how many", "number of",
+"tally", "less than", "fewer than", "more than", "greater than", "at least",
+"at most", "over N", "under N", "between N and M".
+
+**The count/total in the final answer must come ONLY from executing a real
+SQL `COUNT`/`SUM` aggregate against the database — never estimate, round,
+infer from a sample, or guess a number.** If the schema cannot answer the
+count as asked, return the documented "not available" fallback message
+instead of inventing a plausible-sounding number.
+
+Rules:
+
+1. Always express the count as an actual aggregate in SQL:
+   `COUNT(*)`, `COUNT(DISTINCT ...)`, or `SUM(...)` — never a `LIMIT`-truncated
+   row list that the caller is expected to count itself.
+2. **Comparison/threshold wording ("less than", "more than", "at least",
+   "between") — pick the right pattern depending on WHAT is being compared:**
+   - Filtering rows by a numeric column directly (e.g. "posts with more than
+     100 likes", "topics with sentiment_confidence less than 0.5"):
+     use a `WHERE` condition with the matching operator
+     (`>`, `<`, `>=`, `<=`, `BETWEEN`) directly on that column, then `COUNT(*)`
+     if the user wants a count of how many qualify, or return the rows if
+     they want to see them.
+   - Filtering GROUPS by how many rows they contain (e.g. "topics with less
+     than 5 posts", "districts with more than 200 negative posts"): first
+     `GROUP BY` the entity, then filter the group count with `HAVING`, e.g.
+     `GROUP BY t.unique_topic_id HAVING COUNT(*) < 5`. Do NOT use `WHERE` for
+     this case — `WHERE` cannot filter on an aggregate.
+3. Do not silently drop a threshold condition the user asked for — if "more
+   than 50" is part of the request, the generated SQL must contain that
+   condition, not just a plain `COUNT(*)` with no threshold.
+4. Never pre-fill or hardcode a count value in the SQL comment/output —
+   the number must only ever come from what the executed query returns.
+
+### Platform-wise / per-platform counts
+
+Trigger phrases: "platform wise", "per platform", "by platform", "on each
+platform", "count by platform", "twitter vs instagram", "how many on
+Twitter, Instagram, etc.", "split by platform", "total for each platform".
+
+- The platform column for post-level counts is
+  `analyzed_data.post_bank_core_source` (documented values: `TWITTER`,
+  `facebook`, `whatsapp`, `instagram`, `YouTube`, `News_Rss_Feed`,
+  `Google_News`) — never `source_type` (that is a broad category, not a
+  specific platform).
+- For a topic-level platform breakdown that is already pre-aggregated, prefer
+  reading `topic.platform_stats` (JSON) directly instead of re-aggregating
+  `analyzed_data`, per the Sentiment/Platform Stats rule above.
+- Default pattern when the user wants "platform-wise" / "per platform"
+  counts and no pre-aggregated JSON applies:
+
+```sql
+SELECT a.post_bank_core_source AS platform, COUNT(*) AS post_count
+FROM analyzed_data a
+WHERE <the user's other filters — district/date/category/keyword as applicable>
+GROUP BY a.post_bank_core_source
+ORDER BY post_count DESC;
+```
+
+- If the user names specific platforms only (e.g. "count for Twitter and
+  Instagram"), add `AND a.post_bank_core_source IN ('TWITTER','instagram')`
+  (match the documented casing for each value) before the `GROUP BY`, so the
+  breakdown is restricted to just those platforms rather than all of them.
+- If the user asks for a single platform's count only ("how many posts on
+  Twitter"), a plain `WHERE a.post_bank_core_source = 'TWITTER'` +
+  `COUNT(*)` is enough — only use `GROUP BY` when the user wants the
+  breakdown across multiple/all platforms.
+- Always apply the user's other stated filters (district, date range,
+  category, sentiment, keyword) inside the same `WHERE` clause alongside the
+  platform grouping — a platform-wise count request does not override any
+  other filter already present in the question.
+
+---
+
 ## Sorting
 
 When no ordering is specified:
