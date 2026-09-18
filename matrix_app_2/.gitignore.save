@@ -1,0 +1,58 @@
+x^X
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Environment variables
+.env
+.env.*
+
+# Logs & Monitoring
+*.log
+logs/
+monitor_data/
+queries_with_memory*.txt
+with_memory*.txt
+server_restart.log
+vm_monitor.log
+worker.log
+
+# Databases & Reports
+*.db
+*.db-wal
+*.db-journal
+*.sqlite3
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Archives & OS
+*.zip
+*.tar.gz
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local diagnostic / coverage tools
+check_template_coverage.py

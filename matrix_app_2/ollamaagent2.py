@@ -1221,7 +1221,7 @@ def _ground_voice_entities(entities: List[str]) -> Dict[str, Any]:
 # never reach that logic and instead loop in this node's own ambiguous-
 # request clarification (see Job 0 instruction injected below).
 _HASHTAG_INTENT_WORDS_RE = re.compile(
-    r"\bhash(?:tag)?(?:s|ed|ging)?\b|\bmentions?\b|\btags?\b",
+    r"\bhash(?:tag)?(?:s|ed|ging)?\b|\bmentions?\b|\btag(?:s|ged|ging)?\b",
     re.IGNORECASE,
 )
 
@@ -1230,7 +1230,8 @@ _HASHTAG_INTENT_WORDS_RE = re.compile(
 # today", "hashtag for X", "what is the hashtag" (no specific tag named).
 _HASHTAG_QUERY_STOPWORDS = {
     "today", "yesterday", "content", "mention", "mentions", "tag", "tags",
-    "hashtag", "hashtags", "hash", "hashed", "used", "post", "posts", "the",
+    "tagged", "tagging", "hashtag", "hashtags", "hash", "hashed", "used",
+    "post", "posts", "the",
     "database", "matrix", "trends", "trend", "trending", "social", "media",
     "of", "on", "for", "about", "in", "is", "are", "was", "were", "what",
     "show", "me", "please", "give", "list", "and", "or", "that", "this",
@@ -3941,6 +3942,14 @@ REASONING RULES:
    - Clearly say that no exact database match was found.
    - If NEAR-MATCH CONTENT is available, describe it only as possible related content requiring human review.
    - Never convert near-match content into counts or confirmed findings.
+   - If multiple NEAR-MATCH CONTENT entries share an identical/placeholder-looking
+     `unique_topic_id` (e.g. all zeros, or the same ID repeated across entries
+     that are supposedly different posts), treat that as unreliable/placeholder
+     data — do not present it as real related content either.
+   - For a tag/mention/hashtag query specifically ("how many posts tag X",
+     "is X tagged/mentioned"), do not use near-match content as a substitute
+     answer — state plainly that no posts were found tagging/mentioning that
+     entity for the requested period.
 
 5a. For ONE OR A FEW results (TOTAL ROWS is 1-5):
    - You MUST restate the actual field values present in those rows — topic
@@ -4090,9 +4099,25 @@ clear, helpful, plain-language answer for the user.
   detail is unavailable when the corresponding field is genuinely empty in
   DATA ROWS, never as a substitute for stating a value that IS present.
 - If TOTAL ROWS is 0 and NEAR-MATCH CONTENT is provided below, clearly state
-  that no exact database match was found, then list the near-match content as
-  possibly-related leads worth a human review — never state them as a
-  confirmed count.
+  that no exact database match was found, then describe the near-match
+  content in plain language as possibly-related leads worth a human review —
+  never state them as a confirmed count or as the actual tagged/mentioned
+  posts the user asked for.
+  - Never dump the raw internal `table=... unique_topic_id=... category=...`
+    field format from NEAR-MATCH CONTENT into the answer — rewrite it as a
+    normal sentence (what it's about, platform, rough date) the way you would
+    describe a real result.
+  - If two or more NEAR-MATCH CONTENT entries share the exact same
+    `unique_topic_id` (especially an all-zeros or obviously placeholder-looking
+    ID), do NOT present them as distinct related items — that pattern
+    indicates placeholder/test data, not real distinct posts. Treat it as
+    "no usable near-match data either" and say plainly that nothing was found.
+  - For a tag/mention/hashtag question specifically (e.g. "how many posts tag
+    X", "is X tagged today"), do not substitute NEAR-MATCH CONTENT for the
+    real answer at all — that question needs an exact count/list, and a
+    similarity-search lead cannot honestly stand in for it. State that no
+    posts were found tagging/mentioning the named entity for the requested
+    period.
 - Never show raw SQL to the user.
 {pagination_note}
 USER QUERY: {query}
@@ -4249,8 +4274,33 @@ When the query asks:
 - "Which posts tag X?"
 - "Show posts mentioning X"
 - "Find posts where account X is tagged"
+- "How many posts is X tagged in?" / "how many posts tagged X today"
 
 Return post-level information.
+
+**"Tagged" has TWO different real-world forms in this data — check BOTH,
+never just one:**
+
+1. **Formal @mention** — captured by NLP extraction into
+   `analyzed_data.mention_ids_extracted`, resolved via the `monitor_profiles`
+   join pattern documented below.
+2. **Hashtag reference** — the account/person/organization named as a literal
+   hashtag inside the post text (e.g. `#uppolice`, `#UPPolice`), which lives
+   in `analyzed_data.input_text`, NOT in `mention_ids_extracted`. This is
+   extremely common on Instagram in particular — an org can be "tagged" in a
+   post purely via hashtag with no formal @mention extracted at all.
+
+For "tagged"/"mentions" questions about a person, government official, or
+organization (including UP Police / any of its units), generate SQL that
+checks **both** signals, OR'd together, so a post matching either counts:
+
+- `LOWER(a.mention_ids_extracted) LIKE CONCAT('%', LOWER(TRIM(LEADING '@' FROM '<name>')), '%')`
+- `a.input_text LIKE '%#<name>%'` (try common casings/spacing variants of the
+  name as separate OR'd LIKE conditions — hashtags are not normalized)
+
+Do not rely on `mention_ids_extracted` alone and conclude "no posts found" if
+it returns zero rows — a hashtag-only tag is a real, valid match and must be
+checked before concluding there's nothing.
 
 Preferred columns from analyzed_data:
 
@@ -4291,7 +4341,23 @@ For tagged-post queries:
 
 Use:
 
-monitor_profiles + analyzed_data
+monitor_profiles + analyzed_data (for the @mention signal)
+analyzed_data alone (for the hashtag signal — no monitor_profiles join needed
+for a plain `input_text LIKE '%#term%'` condition)
+
+**Never fabricate or hallucinate a count or a post.** The count/list in the
+final answer must equal exactly what the executed SQL (checking both signals
+above) returned. If — after checking both @mention and hashtag forms — zero
+rows come back, the correct answer is that no posts were found matching that
+tag for the requested period; do not substitute Qdrant/near-match/similarity
+content as if it were a real tagged post, and do not present any row whose
+`unique_topic_id` looks like a placeholder (e.g. all-zeros, or an ID repeated
+identically across otherwise-different rows) as a real match.
+
+**Every returned post must show which specific tag it matched on** (e.g.
+"matched via hashtag #uppolice" or "matched via @mention of UPPolice") — not
+just the post text and category — so the user can see the actual evidence,
+not just a count.
 
 ---
 
@@ -4416,8 +4482,16 @@ Rules:
 - Do NOT answer tag/mention questions using only `monitor_profiles`.
 - Do NOT join `monitor_profiles.id` with `analyzed_data`.
 - There is NO foreign-key relationship between these tables.
-- Do NOT search `input_text`, `topic_title`, or `post_title` for tag questions unless the user explicitly asks for text/content mentions.
-- `mention_ids_extracted` is the authoritative field for profile tagging.
+- `mention_ids_extracted` is the authoritative field for a formal @mention —
+  use it for `monitor_profiles`-driven tag/mention questions as shown above.
+- **Exception — hashtag-form tagging:** this `mention_ids_extracted`-only
+  restriction covers the @mention signal specifically. It does NOT mean
+  skip hashtag matches. Per the "Profile, Mention and Tag Output Rules"
+  section above, ALSO OR-in `a.input_text LIKE '%#<name>%'` for the same
+  name/handle — a hashtag mention (e.g. `#uppolice`) is a real tag that
+  never appears in `mention_ids_extracted` and would otherwise be silently
+  missed. Only plain incident/content-search questions (not tag/mention
+  questions at all) should skip `input_text`/`topic_title`/`post_title`.
 
 Examples:
 
