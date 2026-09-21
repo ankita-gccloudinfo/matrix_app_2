@@ -45,4 +45,4 @@ cookies.txt
 # Legacy matrix_app folders
 matrix_app/
 matrix_app 2/
-matrix_app*/
+!matrix_app_2/

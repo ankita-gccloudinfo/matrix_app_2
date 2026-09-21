@@ -32,7 +32,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List, Optional
 
-import fitz  # pymupdf — text-only extraction here, no OCR/embedding: this
+import pymupdf as fitz  # pymupdf — text-only extraction here, no OCR/embedding: this
              # service just needs enough text to hand the LLM a summary, not
              # the full ingestion pipeline common/services/pdf_rag.py runs.
 from html import escape as html_escape

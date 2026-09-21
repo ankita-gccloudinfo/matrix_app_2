@@ -783,6 +783,21 @@ CLARIFICATION_FALLBACK = {
     ),
 }
 
+# Used instead of CLARIFICATION_FALLBACK when _humanize_hint_preview() leaves
+# nothing usable (e.g. every hit was placeholder/test data) — avoids showing
+# a "Related data found:" heading with nothing under it.
+CLARIFICATION_FALLBACK_NO_PREVIEW = {
+    "en": (
+        "I couldn't find a clear match for your question in the monitoring "
+        "database. Could you tell me exactly which specific person, incident, "
+        "or detail you're asking about?"
+    ),
+    "hi": (
+        "मुझे आपके प्रश्न के लिए मॉनिटरिंग डेटाबेस में कोई स्पष्ट जानकारी नहीं मिली। "
+        "क्या आप बता सकते हैं कि आप किस विशेष व्यक्ति, घटना या जानकारी के बारे में पूछ रहे हैं?"
+    ),
+}
+
 NEGATIVE_CLARIFICATION = {
     "en": 'No problem — could you say exactly what "{term}" refers to?',
     "hi": 'कोई बात नहीं — क्या आप बता सकते हैं कि "{term}" का सटीक अर्थ क्या है?',
@@ -792,6 +807,75 @@ CANDIDATE_CONFIRM_FALLBACK = {
     "en": 'Are you asking about "{candidate}"? (yes/no)',
     "hi": 'क्या आप "{candidate}" के बारे में पूछ रहे हैं? (हाँ/नहीं)',
 }
+
+# =========================
+# HUMAN-READABLE PREVIEW OF RAW HINT LINES
+# =========================
+# content_index_hint (built in content_index_search_node / fallback_decider_node
+# above) is an *internal* string meant for table_selector_node's SQL prompt —
+# lines like "- table=analyzed_data, unique_topic_id=..., category=[...],
+# district=[...], platform=..., text=...". That format is fine for an LLM
+# writing SQL; it is NOT fine to show a user, but the fallback_exhausted
+# clarification message below used to show it as-is ("EXACTLY as given,
+# unchanged"), which is what produced replies like:
+#   "table=analyzed_data, unique_topic_id=4eb8b702-..., category=["GENERAL
+#    COMPLAINTS"], district=["Aligarh"], platform=TWITTER, text=..."
+# _humanize_hint_preview() rewrites each recognizable line into a plain
+# sentence deterministically (no LLM call needed), so even the safety-net
+# path (used when the LLM call to write the clarification message fails)
+# never dumps raw internal fields at the user. The main path also asks the
+# LLM to do this same rewrite in its own words — see fallback_exhausted
+# handling in query_rewriter_node.
+_HINT_LINE_RE = re.compile(
+    r"table=(?P<table>[^,]*),\s*unique_topic_id=(?P<tid>[^,]*),\s*"
+    r"category=(?P<category>\[[^\]]*\]|[^,]*),\s*district=(?P<district>\[[^\]]*\]|[^,]*),\s*"
+    r"platform=(?P<platform>[^,]*),\s*text=(?P<text>.*)$"
+)
+
+
+def _clean_list_field(val: str) -> str:
+    """'["GENERAL COMPLAINTS"]' / "['Aligarh']" / 'Aligarh' -> 'GENERAL COMPLAINTS' / 'Aligarh'."""
+    val = (val or "").strip()
+    if val.startswith("[") and val.endswith("]"):
+        inner = val[1:-1]
+        items = [x.strip().strip('"\'') for x in inner.split(",")]
+        items = [x for x in items if x]
+        return ", ".join(items)
+    return val.strip('"\'')
+
+
+def _humanize_hint_preview(raw: str) -> str:
+    """Rewrite raw `- table=..., unique_topic_id=..., ...` hint lines (or any
+    other line we don't recognize) into short plain-language bullet points.
+    Lines with a placeholder/all-zero unique_topic_id are dropped. Lines that
+    don't match the known internal format are passed through unchanged (e.g.
+    the Neo4j "Incident: ... | Posts: ..." format, which is already
+    reasonably readable prose rather than a raw field dump)."""
+    out_lines = []
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = _HINT_LINE_RE.match(line.lstrip("- ").strip())
+        if not m:
+            out_lines.append(line)
+            continue
+        if _is_placeholder_topic_id(m.group("tid")):
+            continue  # skip placeholder/test rows entirely
+        platform = (m.group("platform") or "").strip()
+        district = _clean_list_field(m.group("district"))
+        category = _clean_list_field(m.group("category"))
+        text = (m.group("text") or "").strip()[:120]
+
+        sentence = f"A {platform} post" if platform else "A post"
+        if district:
+            sentence += f" from {district}"
+        if category:
+            sentence += f" ({category})"
+        if text:
+            sentence += f': "{text}"'
+        out_lines.append(f"- {sentence}")
+    return "\n".join(out_lines)
 
 today = datetime.now().strftime("%Y-%m-%d")
 yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1416,9 +1500,12 @@ async def query_rewriter_node(state: State) -> dict:
     # ── Fallback exhaustion shortcut ──────────────────────────────────────
     if state.get("fallback_exhausted"):
         graph_context = state.get("content_index_hint", "")
-        # Build a short preview of what we actually found
+        # Build a short preview of what we actually found, then rewrite the
+        # raw internal `table=..., unique_topic_id=...` field dump into plain
+        # sentences before it ever goes near an LLM prompt or the user — see
+        # _humanize_hint_preview() above for why.
         preview_lines = [line for line in graph_context.splitlines() if line.strip()][:5]
-        preview = "\n".join(preview_lines)
+        preview = _humanize_hint_preview("\n".join(preview_lines))
         clarification_prompt = f"""You are the UP Police Matrix assistant. A search for the
 user's question found only loosely related data, not an exact match.
 
@@ -1429,18 +1516,30 @@ USER'S QUESTION:
 
 Write a short, polite message that:
 1. Tells the user only loosely related data was found, not an exact match.
-2. Shows the related data below under a short bolded heading, EXACTLY as given, unchanged.
-3. Asks them to clarify exactly which specific person, incident, or detail they mean.
+2. Shows the related data below under a short bolded heading, as short plain-
+   language bullet points (what it's about, platform, district, rough date if
+   present) — NOT as raw internal field names like `table=`, `unique_topic_id=`,
+   `category=`, `district=`, `platform=`, `text=`. The items below are already
+   plain-language bullets; you may lightly tidy their wording but do not
+   reintroduce those internal field names.
+3. If there is nothing usable to show (the list below is empty), say plainly
+   that no related data was found, and skip straight to point 4.
+4. Asks them to clarify exactly which specific person, incident, or detail
+   they mean.
 
 RELATED DATA FOUND:
-{preview}
+{preview if preview else "(nothing usable)"}
 
 Return ONLY the message to show the user. No JSON. No explanation of your reasoning."""
         clarification_msg = (await call_llm(clarification_prompt)).strip()
         if not clarification_msg:
             # LLM call failed/timed out — fall back to a fixed template picked
             # by the same language cue, instead of always defaulting to Hindi.
-            clarification_msg = CLARIFICATION_FALLBACK[_query_language(query)].format(preview=preview)
+            lang = _query_language(query)
+            if preview:
+                clarification_msg = CLARIFICATION_FALLBACK[lang].format(preview=preview)
+            else:
+                clarification_msg = CLARIFICATION_FALLBACK_NO_PREVIEW[lang]
         add_trace("query_rewriter", output="Fallback exhausted — asking user for clarification")
         return {
             "needs_clarification": True,
@@ -2738,7 +2837,7 @@ Output ONLY a valid JSON object:
             "relationship_entities": relationship_entities,
         }
 
-    candidate_term = _find_unresolved_short_form(standalone_query, set(state.get("duck_resolved_terms", [])))
+    candidate_term = await _find_unresolved_short_form_checked(standalone_query, set(state.get("duck_resolved_terms", [])))
     if candidate_term:
         recycle_rows = await asyncio.to_thread(_fetch_recycle_search_entries)
         already_known = any(
@@ -2865,6 +2964,40 @@ _COMMON_QUERY_WORDS = {
     "incident", "matters", "matter", "wise",
 }
 
+# Romanized Hindi ("Hinglish") function words — question words, pronouns,
+# postpositions, particles, conjunctions, common auxiliary/light verbs. Users
+# routinely type Hindi in Latin script (e.g. "kaun se social media influencers
+# ... viral kar rahe hain"), and every 2-6 letter word in that sentence goes
+# through the SAME acronym check as an English word. Without this set, a word
+# like "kaun" (कौन, "who") is indistinguishable from a real unresolved acronym
+# like "cjp", so it gets sent out to live DuckDuckGo grounding instead of
+# being recognized as an ordinary interrogative. This list is deliberately
+# generic Hindi function-word vocabulary, not query-specific — the same
+# categories of gap as the English list above (question words, pronouns,
+# common verbs), just for the other language users type in.
+_COMMON_QUERY_WORDS_HINGLISH = {
+    # Question words
+    "kaun", "kya", "kaise", "kab", "kahan", "kahaan", "kyun", "kyu", "kyon",
+    "kitna", "kitne", "kitni", "kaunsa", "kaunsi", "kaunse", "konsa", "konsi",
+    "konse",
+    # Pronouns / determiners
+    "ye", "yeh", "wo", "voh", "woh", "iska", "uska", "unka", "iske", "uske",
+    "unke", "inka", "hum", "tum", "aap", "main", "mai", "mera", "meri", "mere",
+    "tera", "teri", "tere", "hamara", "hamari", "hamare", "tumhara", "tumhari",
+    "tumhare", "aapka", "aapki", "aapke", "jiska", "jiski", "jiske",
+    # Postpositions / particles / auxiliaries
+    "ka", "ki", "ke", "ko", "se", "mein", "me", "hai", "hain", "hoon", "hun",
+    "tha", "thi", "the", "par", "pe", "bhi", "nahi", "nahin", "na", "to",
+    "hi", "ho", "jo", "ji", "wala", "wali", "wale", "waala", "waali", "waale",
+    # Conjunctions
+    "aur", "ya", "lekin", "kyunki", "kyoki", "magar",
+    # Common light verbs / participles
+    "kar", "kare", "karo", "karta", "karti", "karte", "raha", "rahi", "rahe",
+    "hoga", "hogi", "honge", "gaya", "gayi", "gaye", "diya", "diye", "liya",
+    "liye", "aaj", "aisi", "aise", "aisa",
+}
+_COMMON_QUERY_WORDS |= _COMMON_QUERY_WORDS_HINGLISH
+
 
 def _find_unresolved_short_form(query: str, already_resolved: set) -> str:
     """Finds the first short (2-6 letter) acronym/short-form in the query that
@@ -2880,6 +3013,86 @@ def _find_unresolved_short_form(query: str, already_resolved: set) -> str:
             continue
         if lower in _COMMON_QUERY_WORDS:
             continue
+        return candidate
+    return ""
+
+
+# Few-shot examples for _is_genuine_short_form below. Kept as data (not just
+# baked into the prompt string) so new failures found in the trace log can be
+# added here as a one-line fix instead of hand-editing prose each time.
+_SHORT_FORM_GATE_EXAMPLES = [
+    # (query, flagged candidate, is it actually an acronym/short-form?)
+    ("kaun se Aise social media influencers Hain Jo ki topic ko aaj viral kar rahe hain",
+     "kaun", False),  # Hindi "who", typed in Latin script — not an acronym
+    ("CJP ka role kya tha is maamle mein", "CJP", True),  # real org abbreviation
+    ("kitne tickets aaj raise hue", "kitne", False),  # Hindi "how many"
+    ("SIT ne kya kiya is case mein", "SIT", True),  # Special Investigation Team
+    ("aise posts jo abhi trending hain unki list do", "aise", False),  # Hindi "such/like this"
+]
+
+
+async def _is_genuine_short_form(candidate: str, query: str) -> bool:
+    """LLM gate for _find_unresolved_short_form()'s regex-based candidate.
+
+    _find_unresolved_short_form is a pure shape check — any 2-6 letter
+    Latin-script word not on the (English-only) _COMMON_QUERY_WORDS
+    allowlist looks exactly like an unresolved acronym to it. That's fine for
+    English but breaks on Hinglish: a query like "kaun se ... viral kar rahe
+    hain" flags "kaun" (Hindi for "who") as if it were an org abbreviation
+    like "CJP", purely because nobody had added "kaun" to the stopword list
+    yet. Patching the list closes that one word but the same failure recurs
+    for every Hindi function word not yet listed — it doesn't generalize.
+
+    This asks the LLM to make the actual judgment a human would: is this
+    word standing in for something (an organization, party, technical term)
+    that needs looking up, or is it just ordinary vocabulary — in English,
+    Hindi, or Hindi written in Latin script — that happens to be short? A
+    handful of concrete examples (including the "kaun" failure itself) are
+    given as few-shot guidance so the model has the same failure case to
+    generalize from that a human maintaining a stopword list would.
+
+    Fails OPEN (returns True, i.e. "treat it as a possible acronym") on a
+    parse/timeout error — the existing downstream checks (internal-DB-first,
+    then DuckDuckGo grounding must actually succeed) already guard against a
+    false positive here, so failing open just falls through to those
+    existing safety nets rather than silently suppressing a real acronym.
+    """
+    examples_block = "\n".join(
+        f'- QUERY: "{q}" | CANDIDATE: "{c}" -> {"true" if a else "false"}'
+        for q, c, a in _SHORT_FORM_GATE_EXAMPLES
+    )
+    prompt = f"""A shape-based detector flagged the word "{candidate}" in the query below as a
+possible unresolved acronym/organization short-form (like "CJP" or "SIT") that might need an
+external lookup to understand.
+
+QUERY: {query}
+
+Decide: is "{candidate}" actually an abbreviation, acronym, or organization/entity/technical
+short-form that a human would need to look up — or is it just an ordinary word (in English,
+Hindi, or Hindi written in Latin script i.e. "Hinglish") that merely happens to be short?
+
+EXAMPLES:
+{examples_block}
+
+Output ONLY a JSON object: {{"is_acronym": true or false}}
+"""
+    raw = await call_llm(prompt)
+    try:
+        parsed = json.loads(clean_json_string(raw))
+        return bool(parsed.get("is_acronym", True))
+    except Exception:
+        return True
+
+
+async def _find_unresolved_short_form_checked(query: str, already_resolved: set) -> str:
+    """_find_unresolved_short_form() + the _is_genuine_short_form LLM gate in
+    one call — use this at call sites instead of the raw regex function
+    directly, so a Hinglish (or any other) false positive gets filtered
+    before it triggers an internal-DB check or DuckDuckGo lookup."""
+    candidate = _find_unresolved_short_form(query, already_resolved)
+    if not candidate:
+        return ""
+    if await _is_genuine_short_form(candidate, query):
         return candidate
     return ""
 
@@ -3319,7 +3532,7 @@ async def keyword_of_post_maker_node(state: State) -> dict:
 
     duck_search_term = ""
     if not state.get("duck_search_done"):
-        duck_search_term = _find_unresolved_short_form(query, set(state.get("duck_resolved_terms", [])))
+        duck_search_term = await _find_unresolved_short_form_checked(query, set(state.get("duck_resolved_terms", [])))
 
     db_result, related_variants = await asyncio.gather(
         _db_recycle_search_branch(query),
@@ -3362,7 +3575,7 @@ async def keyword_of_post_maker_and_checker_node(state: State) -> dict:
     if not keywords:
         duck_search_verify_term = ""
         if not state.get("duck_search_verify_done"):
-            duck_search_verify_term = _find_unresolved_short_form(query, set(state.get("duck_resolved_terms", [])))
+            duck_search_verify_term = await _find_unresolved_short_form_checked(query, set(state.get("duck_resolved_terms", [])))
         add_trace("keyword_of_post_maker_and_checker", user_query=query,
                  output="no keywords to check")
         return {
@@ -3413,7 +3626,7 @@ Output ONLY a JSON object:
     # form/acronym (e.g. RHA) worth resolving via go_duck_search_verify.
     duck_search_verify_term = ""
     if not keywords_checked and not state.get("duck_search_verify_done"):
-        duck_search_verify_term = _find_unresolved_short_form(query, set(state.get("duck_resolved_terms", [])))
+        duck_search_verify_term = await _find_unresolved_short_form_checked(query, set(state.get("duck_resolved_terms", [])))
 
     add_trace("keyword_of_post_maker_and_checker", user_query=query,
              output=f"keywords_checked={keywords_checked[:20]}; notes={keyword_notes}"
@@ -5322,6 +5535,22 @@ def _is_junk_topic_text(text: str) -> bool:
     return any(text == t or text.startswith(t) for t in _JUNK_TOPIC_TITLES)
 
 
+# All-zeros (or otherwise all-same-char) UUID used as a placeholder
+# unique_topic_id for rows that never got a real topic assigned. Distinct
+# from _is_junk_topic_text (which matches on the *text content*) — this
+# catches the same kind of placeholder row via its *id* instead, which
+# _is_junk_topic_text misses (e.g. a placeholder row whose text_content is
+# just hashtags rather than one of the fixed junk titles).
+_PLACEHOLDER_TOPIC_ID_RE = re.compile(r"^(0+-0+-0+-0+-0+|0{8}-0{4}-0{4}-0{4}-0{12})$")
+
+
+def _is_placeholder_topic_id(topic_id: str) -> bool:
+    """True if `topic_id` looks like a placeholder/test UUID (all zeros)
+    rather than a real assigned topic id."""
+    topic_id = (topic_id or "").strip()
+    return bool(topic_id) and bool(_PLACEHOLDER_TOPIC_ID_RE.match(topic_id))
+
+
 def _inject_unassigned_exclusion(sql: str) -> str:
     topic_alias = _detect_table_alias(sql, 'topic')
     data_alias = _detect_table_alias(sql, 'analyzed_data')
@@ -5891,6 +6120,8 @@ async def content_index_search_node(state: State) -> dict:
                 p = point.payload or {}
                 if _is_junk_topic_text(p.get("text_content", "")):
                     continue  # skip the "unassigned/not relevant" catch-all bucket
+                if _is_placeholder_topic_id(p.get("unique_topic_id", "")):
+                    continue  # skip placeholder/all-zero topic ids (test data)
                 hints.append({
                     "source_table": p.get("source_table", ""),
                     "unique_topic_id": p.get("unique_topic_id", ""),
@@ -5928,6 +6159,8 @@ async def content_index_search_node(state: State) -> dict:
                     p = point.payload or {}
                     if _is_junk_topic_text(p.get("text_content", "")):
                         continue  # skip the "unassigned/not relevant" catch-all bucket
+                    if _is_placeholder_topic_id(p.get("unique_topic_id", "")):
+                        continue  # skip placeholder/all-zero topic ids (test data)
                     hints.append({
                         "source_table": p.get("source_table", ""),
                         "unique_topic_id": p.get("unique_topic_id", ""),
