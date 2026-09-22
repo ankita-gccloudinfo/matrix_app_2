@@ -697,6 +697,14 @@ from neo4j import GraphDatabase as _Neo4jDriver
 import embedder
 from services.location import UP_DISTRICTS as _UP_DISTRICTS
 
+try:
+    import sqlglot
+    from sqlglot import exp as _sqlglot_exp
+except ImportError:  # pragma: no cover
+    sqlglot = None
+    _sqlglot_exp = None
+
+
 # Flat list of district name strings, for the voice-entity grounding pool
 # below (_fetch_voice_grounding_candidates) — UP_DISTRICTS itself is a list
 # of {"name", "lat", "lng"} dicts used elsewhere for map coordinates.
@@ -1030,7 +1038,8 @@ class State(TypedDict):
     sql: str
     sql_matches: bool                   # output of sql_judge
     sql_match_reason: str
-    retry_count: int                    # retry loop counter (max 2)
+    retry_count: int                    # retry loop counter (max 2) — shared by sql_judge AND is_safe_sql's table-scope gate
+    table_scope_ok: bool                # output of is_safe_sql_node's deterministic table-scope check (_check_sql_table_scope)
     content_index_hint: str             # info from Qdrant for table_selector retry
     content_index_retry_count: int
     rows: List[Any]
@@ -3755,6 +3764,46 @@ TABLE SELECTION RULES:
     - Prefer tables/columns mentioned in the hint when they match the query.
     - Do not blindly follow the hint if it conflicts with the schema.
 
+DOMAIN SCENARIO GUIDE:
+Recognize these five recurring intelligence-question patterns even when the
+user's wording is loose/informal, and select tables accordingly. (These are
+the same named patterns SQL generation uses later — selecting the right
+tables for them here avoids a wasted retry loop back to this node.)
+
+- Pattern A — Category + rolling time-window count (e.g. "sensational crime
+  last week", "high order category cases this month"): this is a
+  topic-level count, not individual posts — select `topic`, not
+  `analyzed_data`, unless the user also wants to see individual post text.
+
+- Pattern B — Zone-level rollup, any time period (e.g. "zones -> heinous
+  crimes against children/women -> any time period"): `zone` is NOT a column
+  on `topic` or `analyzed_data` — it only exists on `thana_matrix`. Whenever
+  the question asks for a zone/range/commissionerate breakdown, you MUST
+  select `thana_matrix` in addition to `topic`/`analyzed_data`, even though
+  the query doesn't literally mention "thana".
+
+- Pattern C — District ranking (highest/lowest) with sentiment/social-impact
+  context: select `topic` for the ranking count. For the sentiment/impact
+  part, prefer `topic.sentiment_stats`/`topic.emotional_stats` (already
+  pre-aggregated on the `topic` table you've already selected) over also
+  selecting `analyzed_data` — only add `analyzed_data` if the question
+  specifically needs post-level sentiment rather than a topic-level summary.
+
+- Pattern D — VIP/negative-mention tracking (e.g. "negative posts against
+  CM, ministers, officials", "bad words about [official]"): this is the
+  standard tag/mention pattern from rule 7 above — ALWAYS select BOTH
+  `monitor_profiles` AND `analyzed_data` together. `monitor_profiles` alone
+  identifies the handle but has no post text/sentiment/author, so selecting
+  it alone can never answer this question.
+
+- Pattern E — "Is this account a bot?" / coordinated-behavior scoring: there
+  is NO bot-detection table or column anywhere in this schema — do not
+  select a table hoping one exists. If the user is asking only for a bot
+  score, select no tables and say so in `reason` (out of scope for this
+  schema). If they're also asking for the underlying account signals a
+  human analyst would review (followers, verification, account age), select
+  `post_users` only.
+
 OUTPUT FORMAT:
 Return ONLY valid JSON.
 
@@ -4420,7 +4469,162 @@ If the answer is complete and not missing requested details, set "is_complete": 
 # LLM (vLLM / OpenAI-compatible) — NATURAL LANGUAGE -> SQL
 # =========================
 
-SYSTEM_PROMPT = f"""You are an expert MySQL query generator for the UP Police Social Media Monitoring database.
+def _split_schema_into_tables():
+    """One-time split of DB_SCHEMA_YAML into (preamble, {table_name: block}, footer).
+
+    - preamble: everything up to and including the `  tables:` line — the
+      routing guide, never_query_these_tables, tables_not_currently_wired_in.
+      Always relevant regardless of which tables are selected.
+    - blocks: one text chunk per `    - name: <table>` entry, keyed by table
+      name, each including its trailing blank line.
+    - footer: the `RELATIONSHIPS & GLOBAL RULES` section onward (join keys,
+      json_array/bit/text-numeric master lists, alias_convention). These are
+      cross-table rules that apply no matter which tables were selected, so
+      they're never trimmed.
+
+    Computed once at import time since DB_SCHEMA_YAML is a static string —
+    not re-parsed on every generate_sql() call.
+    """
+    marker = "\n  tables:\n"
+    idx = DB_SCHEMA_YAML.index(marker)
+    preamble = DB_SCHEMA_YAML[: idx + len(marker)]
+
+    footer_marker = "\n  # RELATIONSHIPS & GLOBAL RULES"
+    footer_idx = DB_SCHEMA_YAML.index(footer_marker)
+    tables_section = DB_SCHEMA_YAML[idx + len(marker): footer_idx]
+    footer = DB_SCHEMA_YAML[footer_idx:]
+
+    blocks = {}
+    parts = re.split(r"(?=^    - name: )", tables_section, flags=re.MULTILINE)
+    for part in parts:
+        m = re.match(r"    - name: (\S+)", part)
+        if m:
+            blocks[m.group(1)] = part
+    return preamble, blocks, footer
+
+
+_SCHEMA_PREAMBLE, _SCHEMA_TABLE_BLOCKS, _SCHEMA_FOOTER = _split_schema_into_tables()
+
+
+def _build_schema_subset(selected_tables: list) -> str:
+    """Return DB_SCHEMA_YAML trimmed to only the documented tables in
+    `selected_tables`, plus the always-relevant preamble and the
+    RELATIONSHIPS & GLOBAL RULES footer (these apply across tables
+    regardless of which ones are selected — e.g. the JSON-array-columns
+    list, bit-columns list, and join keys are meaningless in isolation
+    per-table).
+
+    Falls back to the FULL schema if `selected_tables` is empty or
+    contains any name not found in the schema. This is deliberately
+    conservative: table_selector_node's output is LLM-generated and can
+    be wrong or incomplete, and an unrecognized table name is a signal
+    that this turn's selection can't be fully trusted — in that case
+    showing the model everything (the previous, always-correct behavior)
+    is safer than silently hiding a table it may actually need.
+    """
+    if not selected_tables:
+        return DB_SCHEMA_YAML
+
+    unknown = [t for t in selected_tables if t not in _SCHEMA_TABLE_BLOCKS]
+    if unknown:
+        return DB_SCHEMA_YAML
+
+    # Preserve original schema order (not selection order) so cross-references
+    # between tables still read naturally and output is stable/cache-friendly.
+    ordered = [t for t in _SCHEMA_TABLE_BLOCKS if t in selected_tables]
+    tables_text = "".join(_SCHEMA_TABLE_BLOCKS[t] for t in ordered)
+    return _SCHEMA_PREAMBLE + "\n" + tables_text + _SCHEMA_FOOTER
+
+
+# =========================
+# TABLE-SCOPE VALIDATION — deterministic hard gate against generated SQL
+# referencing tables outside what table_selector_node selected.
+#
+# This exists because the prompt-only "you MUST ONLY use these tables"
+# instruction in generate_sql() is advisory, not enforced: nothing
+# previously checked that the LLM actually complied before the SQL ran.
+# =========================
+
+# Small lookup tables the schema itself documents as being joined in
+# implicitly by other tables' own business rules, without the user's
+# question ever mentioning them by name — e.g. ticket_priority_derivation
+# (on ticket_raised_table) joins sub_category to resolve priority, and a
+# taxonomy explanation naturally touches both category tables together.
+# Treated as always in-scope so a correct, schema-compliant join isn't
+# rejected just because table_selector_node didn't separately name them.
+ALWAYS_ALLOWED_LOOKUP_TABLES = {"broad_category", "sub_category"}
+
+
+def _extract_sql_tables(sql: str) -> Optional[set]:
+    """Parse `sql` and return the set of (lowercased, unqualified) table
+    names it references. Returns None if sqlglot isn't installed or the
+    SQL fails to parse — callers must treat None as "couldn't check" and
+    fail open, not as "zero tables referenced".
+    """
+    if sqlglot is None or not sql or not sql.strip():
+        return None
+    try:
+        parsed = sqlglot.parse_one(sql, read="mysql")
+    except Exception:
+        return None
+    try:
+        return {
+            t.name.lower()
+            for t in parsed.find_all(_sqlglot_exp.Table)
+            if t.name
+        }
+    except Exception:
+        return None
+
+
+def _check_sql_table_scope(sql: str, selected_tables: list) -> tuple:
+    """Deterministic check: does `sql` reference only tables in
+    `selected_tables` (plus ALWAYS_ALLOWED_LOOKUP_TABLES)?
+
+    Returns (in_scope: bool, reason: str). Fails OPEN (in_scope=True) in
+    every case where the check itself can't be trusted to be correct:
+    - sqlglot not installed, or the SQL didn't parse (ambiguous, not a
+      confirmed violation — don't block a possibly-correct query over a
+      parser limitation).
+    - selected_tables is empty (table_selector_node's own fallback path,
+      or the earlier "unknown table name" fallback in
+      _build_schema_subset, already showed the model the FULL schema in
+      that case — restricting execution afterwards would punish the
+      query for a promise the prompt never actually made it).
+
+    Only returns in_scope=False when sqlglot successfully parsed the SQL
+    AND found at least one table outside the allowed set — a confirmed,
+    explainable violation, not a guess.
+    """
+    if not selected_tables:
+        return True, "no table restriction in effect (full schema was shown)"
+
+    sql_tables = _extract_sql_tables(sql)
+    if sql_tables is None:
+        return True, "table-scope check skipped (sqlglot unavailable or SQL did not parse)"
+
+    allowed = {t.lower() for t in selected_tables} | ALWAYS_ALLOWED_LOOKUP_TABLES
+    known_schema_tables = set(_SCHEMA_TABLE_BLOCKS.keys())
+
+    hallucinated = sql_tables - known_schema_tables
+    out_of_scope = (sql_tables & known_schema_tables) - allowed
+
+    if not hallucinated and not out_of_scope:
+        return True, "all referenced tables are within the selected scope"
+
+    parts = []
+    if hallucinated:
+        parts.append(f"references table(s) not in the documented schema at all: {sorted(hallucinated)}")
+    if out_of_scope:
+        parts.append(
+            f"references real table(s) outside the selected set: {sorted(out_of_scope)} "
+            f"(selected: {sorted(selected_tables)})"
+        )
+    return False, "; ".join(parts)
+
+
+def _build_system_prompt(schema_text: str) -> str:
+    return f"""You are an expert MySQL query generator for the UP Police Social Media Monitoring database.
 
 Your task is to convert a user's natural language request into **exactly one** valid, read-only MySQL `SELECT` statement.
 
@@ -4428,7 +4632,7 @@ Your task is to convert a user's natural language request into **exactly one** v
 
 Use **only** the tables, columns, relationships, and business rules defined in the following schema.
 
-{DB_SCHEMA_YAML}
+{schema_text}
 
 Do not invent or assume any table, column, relationship, alias, or key that is not explicitly documented.
 
@@ -5359,10 +5563,20 @@ Example: "flag posts/accounts with possible bot behavior, score 1-5."
 """
 
 
-def _call_sql_finetuned_backend(user_content: str) -> str:
+# Full-schema version, kept for backward compatibility (nothing in this repo
+# currently imports it, but it's cheap to keep and safer than removing it
+# outright) and as the fallback path _build_schema_subset() itself returns to.
+SYSTEM_PROMPT = _build_system_prompt(DB_SCHEMA_YAML)
+
+
+def _call_sql_finetuned_backend(user_content: str, system_prompt: str = SYSTEM_PROMPT) -> str:
     """Calls the dedicated fine-tuned MySQL-LoRA vLLM server (see
     SQL_VLLM_* config near the top of the file). Raises on any failure —
     callers are expected to catch and fall back to _call_sql_general_backend.
+
+    `system_prompt` defaults to the full-schema SYSTEM_PROMPT for backward
+    compatibility, but generate_sql() always passes the request-specific,
+    table-subset prompt built via _build_schema_subset()/_build_system_prompt().
     """
     response = requests.post(
         f"{SQL_VLLM_BASE_URL}/chat/completions",
@@ -5370,7 +5584,7 @@ def _call_sql_finetuned_backend(user_content: str) -> str:
         json={
             "model": SQL_VLLM_MODEL_NAME,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
             "temperature": 0,
@@ -5383,16 +5597,19 @@ def _call_sql_finetuned_backend(user_content: str) -> str:
     return response.json()["choices"][0]["message"]["content"]
 
 
-def _call_sql_general_backend(user_content: str) -> str:
+def _call_sql_general_backend(user_content: str, system_prompt: str = SYSTEM_PROMPT) -> str:
     """Calls the original general-purpose vLLM backend (VLLM_BASE_URL) —
-    the pre-existing SQL-generation path, kept as the fallback."""
+    the pre-existing SQL-generation path, kept as the fallback.
+
+    See _call_sql_finetuned_backend's docstring re: the `system_prompt` default.
+    """
     response = requests.post(
         f"{VLLM_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {VLLM_API_KEY}"},
         json={
             "model": VLLM_MODEL_NAME,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
             "temperature": 0,
@@ -5422,14 +5639,24 @@ def generate_sql(question: str, previous_sql: str = "", feedback: str = "", sele
     if previous_sql and feedback:
         user_content += f"\n\n===========================\nPREVIOUS SQL ATTEMPT:\n```sql\n{previous_sql}\n```\n\nFEEDBACK / REASON IT FAILED:\n{feedback}\n\nPlease fix the query based on this feedback."
 
+    # Trim the schema to just the tables table_selector_node already picked
+    # (falls back to the full schema if selected_tables is empty/unrecognized
+    # — see _build_schema_subset's docstring). This is in addition to, not
+    # instead of, the "MUST ONLY use" instruction above: that instruction is
+    # about which tables the SQL may reference, this is about which table
+    # *definitions* the model even sees, so a smaller/cheaper context can't
+    # accidentally undermine the instruction's constraint.
+    schema_subset = _build_schema_subset(selected_tables or [])
+    system_prompt = _build_system_prompt(schema_subset)
+
     if SQL_GEN_USE_FINETUNED_MODEL:
         try:
-            content = _call_sql_finetuned_backend(user_content)
+            content = _call_sql_finetuned_backend(user_content, system_prompt)
             return _extract_sql(content)
         except Exception as exc:
             print(f"⚠️ SQL fine-tuned backend failed ({exc}) — falling back to general vLLM backend.")
 
-    content = _call_sql_general_backend(user_content)
+    content = _call_sql_general_backend(user_content, system_prompt)
     return _extract_sql(content)
 
 
@@ -5816,7 +6043,12 @@ async def generate_sql_node(state: State) -> dict:
 
 
 async def is_safe_sql_node(state: State) -> dict:
-    """Wraps is_safe_sql() as a graph node. If unsafe, sets answer and clears sql."""
+    """Wraps is_safe_sql() as a graph node. If unsafe, sets answer and clears sql.
+    Also runs the deterministic table-scope gate (_check_sql_table_scope):
+    on a confirmed violation it loops back to table_selector (sharing the
+    same retry_count budget sql_judge_node uses), instead of only relying
+    on generate_sql()'s prompt-only "MUST ONLY use these tables" instruction.
+    """
     sql = state.get("sql", "")
     if not sql:
         return {"answer": "No SQL was generated."}
@@ -5827,7 +6059,26 @@ async def is_safe_sql_node(state: State) -> dict:
     if not safe:
         return {"sql": "", "rows": [],
                 "answer": f"Generated SQL failed safety check and was not run:\n{sql}"}
-    return {}
+
+    selected_tables = state.get("selected_tables", [])
+    in_scope, scope_reason = _check_sql_table_scope(sql, selected_tables)
+    add_trace("is_safe_sql", output=f"table_scope_ok={in_scope}; {scope_reason}")
+
+    if not in_scope:
+        retry_count = state.get("retry_count", 0)
+        if retry_count >= 2:
+            # Retry budget exhausted — force forward rather than dead-ending
+            # the turn, same policy sql_judge_node uses at its own cap.
+            add_trace("is_safe_sql",
+                       output=f"Table-scope retry limit reached — passing SQL through anyway: {scope_reason}")
+            return {"table_scope_ok": True}
+        return {
+            "table_scope_ok": False,
+            "sql_match_reason": f"Table-scope violation: {scope_reason}",
+            "retry_count": retry_count + 1,
+        }
+
+    return {"table_scope_ok": True}
 
 
 async def _classify_sql_query_intent(query: str) -> str:
@@ -5931,7 +6182,8 @@ async def execute_sql_node(state: State) -> dict:
                 )
                 retry_sql = _inject_unassigned_exclusion(retry_sql)
                 retry_sql = _inject_temporal_filter(retry_sql, state["query"])
-                if is_safe_sql(retry_sql):
+                retry_in_scope, retry_scope_reason = _check_sql_table_scope(retry_sql, state.get("selected_tables", []))
+                if is_safe_sql(retry_sql) and retry_in_scope:
                     retry_rows = await asyncio.to_thread(execute_sql, retry_sql)
                     if retry_rows:
                         sql = retry_sql
@@ -5939,6 +6191,8 @@ async def execute_sql_node(state: State) -> dict:
                         add_trace("execute_sql", output=f"English/Hinglish retry succeeded — {len(rows)} rows.")
                     else:
                         add_trace("execute_sql", output="English/Hinglish retry also returned 0 rows.")
+                elif not retry_in_scope:
+                    add_trace("execute_sql", output=f"English/Hinglish retry SQL rejected — {retry_scope_reason}")
             except Exception as exc:
                 add_trace("execute_sql", output=f"English/Hinglish retry failed: {exc}")
 
@@ -6447,6 +6701,17 @@ def _sql_judge_decision(state: State) -> str:
     return "retry"
 
 
+def _is_safe_sql_decision(state: State) -> str:
+    """is_safe_sql conditional edge: pass or retry (table-scope violation).
+    Defaults to "pass" when table_scope_ok is absent (e.g. the node returned
+    early because the basic keyword safety check already failed and cleared
+    sql — that case is handled by execute_sql_node's own "if not sql" guard,
+    not by this edge)."""
+    if state.get("table_scope_ok", True):
+        return "pass"
+    return "retry"
+
+
 def _execute_decision(state: State) -> str:
     """execute_sql conditional edge: judge, summary, or zero_rows.
     - 'count' intent → judge_and_reason (just format numbers)
@@ -6615,7 +6880,11 @@ _builder.add_conditional_edges("sql_judge", _sql_judge_decision, {
     "retry": "table_selector",
 })
 
-_builder.add_edge("is_safe_sql", "execute_sql")
+# is_safe_sql → pass (continue) or retry (table-scope violation, loop back to table_selector)
+_builder.add_conditional_edges("is_safe_sql", _is_safe_sql_decision, {
+    "pass": "execute_sql",
+    "retry": "table_selector",
+})
 
 # execute_sql → judge, summary, or zero_rows
 _builder.add_conditional_edges("execute_sql", _execute_decision, {
